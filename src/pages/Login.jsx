@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
 import Icon from '../components/Icon';
 
 const Login = () => {
@@ -13,6 +14,17 @@ const Login = () => {
   
   const { signIn, signUp } = useAuth();
 
+  const errorMessages = {
+    'Invalid login credentials': 'Email ou senha incorretos.',
+    'Email not confirmed': 'Confirme seu email antes de entrar. Verifique sua caixa de entrada.',
+    'User already registered': 'Este email já está cadastrado. Tente entrar.',
+    'Password should be at least 6 characters': 'A senha deve ter pelo menos 6 caracteres.',
+    'Unable to validate email address: invalid format': 'Formato de email inválido.',
+    'email rate limit exceeded': 'Muitas tentativas de cadastro. Aguarde alguns minutos e tente novamente.',
+    'over_email_send_rate_limit': 'Muitas tentativas de cadastro. Aguarde alguns minutos e tente novamente.',
+    'For security purposes, you can only request this after': 'Aguarde antes de solicitar outro email.',
+  };
+
   const handleAuth = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -20,7 +32,7 @@ const Login = () => {
 
     try {
       if (isSignUp) {
-        const { error } = await signUp({
+        const { data, error } = await signUp({
           email,
           password,
           options: {
@@ -28,16 +40,30 @@ const Login = () => {
           },
         });
         if (error) throw error;
-        alert('Confirme seu email para continuar!');
+
+        // Se o email de confirmação não é exigido, o usuário já está ativo
+        if (data?.session) {
+          return; // login automático — AuthContext detecta a sessão
+        }
+
+        setError('Conta criada! Verifique seu email para confirmar o cadastro.');
       } else {
         const { error } = await signIn({ email, password });
         if (error) throw error;
       }
     } catch (err) {
-      setError(err.message);
+      const msg = err.message ?? '';
+      const translated = Object.entries(errorMessages).find(([key]) => msg.toLowerCase().includes(key.toLowerCase()));
+      setError(translated ? translated[1] : msg);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleResendConfirmation = async () => {
+    if (!email) { setError('Digite seu email para reenviar a confirmação.'); return; }
+    const { error } = await supabase.auth.resend({ type: 'signup', email });
+    setError(error ? 'Erro ao reenviar. Tente novamente.' : 'Email de confirmação reenviado!');
   };
 
   return (
@@ -51,14 +77,43 @@ const Login = () => {
         animate={{ opacity: 1, y: 0 }}
         className="relative w-full max-w-md bg-surface border border-outline-variant/10 rounded-[2.5rem] shadow-2xl p-8 md:p-12"
       >
-        <div className="flex flex-col items-center mb-10">
-          <div className="w-16 h-16 bg-primary-fixed/10 rounded-2xl flex items-center justify-center mb-6 shadow-inner">
+        <div className="flex flex-col items-center mb-8">
+          <div className="w-16 h-16 bg-primary-fixed/10 rounded-2xl flex items-center justify-center mb-5 shadow-inner">
             <Icon name="account_balance_wallet" className="text-3xl text-primary-fixed" />
           </div>
-          <h1 className="font-headline font-extrabold text-3xl text-on-surface tracking-tighter">FinanceWhats</h1>
-          <p className="font-body text-on-surface-variant text-sm mt-2 opacity-60">
-            {isSignUp ? 'Crie sua conta administrativa' : 'Bem-vindo ao seu cofre digital'}
+          <h1 className="font-['Michroma'] tracking-tight text-3xl flex items-center leading-none">
+            <span className="text-on-surface">CONTROLA</span>
+            <span className="text-primary-fixed ml-1 text-glow">+</span>
+          </h1>
+          <p className="font-body text-on-surface-variant text-sm mt-1 opacity-60">
+            {isSignUp ? 'Crie sua conta gratuita' : 'Bem-vindo ao seu cofre digital'}
           </p>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex bg-on-surface/5 rounded-2xl p-1 mb-8">
+          <button
+            type="button"
+            onClick={() => { setIsSignUp(false); setError(null); }}
+            className={`flex-1 py-3 rounded-xl font-headline font-bold text-sm transition-all ${
+              !isSignUp
+                ? 'bg-primary-fixed text-on-primary shadow'
+                : 'text-on-surface-variant hover:text-on-surface'
+            }`}
+          >
+            Entrar
+          </button>
+          <button
+            type="button"
+            onClick={() => { setIsSignUp(true); setError(null); }}
+            className={`flex-1 py-3 rounded-xl font-headline font-bold text-sm transition-all ${
+              isSignUp
+                ? 'bg-primary-fixed text-on-primary shadow'
+                : 'text-on-surface-variant hover:text-on-surface'
+            }`}
+          >
+            Criar Conta
+          </button>
         </div>
 
         <form onSubmit={handleAuth} className="space-y-6">
@@ -105,13 +160,18 @@ const Login = () => {
           </div>
 
           {error && (
-            <motion.p 
-              initial={{ opacity: 0 }} 
-              animate={{ opacity: 1 }} 
-              className="text-error text-[10px] font-bold uppercase tracking-widest text-center"
-            >
-              {error}
-            </motion.p>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center space-y-2">
+              <p className="text-error text-[10px] font-bold uppercase tracking-widest">{error}</p>
+              {error.includes('email') && !isSignUp && (
+                <button
+                  type="button"
+                  onClick={handleResendConfirmation}
+                  className="text-primary-fixed text-[10px] uppercase tracking-widest hover:underline"
+                >
+                  Reenviar email de confirmação
+                </button>
+              )}
+            </motion.div>
           )}
 
           <button 
@@ -124,20 +184,12 @@ const Login = () => {
             ) : (
               <>
                 <Icon name={isSignUp ? 'person_add' : 'login'} />
-                <span>{isSignUp ? 'Criar Conta' : 'Entrar no Sistema'}</span>
+                <span>{isSignUp ? 'Cadastrar' : 'Entrar no Sistema'}</span>
               </>
             )}
           </button>
         </form>
 
-        <div className="mt-8 text-center">
-          <button 
-            onClick={() => setIsSignUp(!isSignUp)}
-            className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant hover:text-primary-fixed transition-colors"
-          >
-            {isSignUp ? 'Já possui uma conta? Entre aqui' : 'Não tem conta? Solicite acesso'}
-          </button>
-        </div>
       </motion.div>
     </div>
   );

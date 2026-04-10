@@ -1,71 +1,68 @@
-import React, { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import Icon from '../components/Icon';
+import { useAuth } from '../contexts/AuthContext';
+import { getEventsByDate, getEventsByDateRange } from '../lib/database';
 
-const days = [
-  { day: 'Dom', date: 19, active: false },
-  { day: 'Seg', date: 20, active: false },
-  { day: 'Ter', date: 21, active: true  },
-  { day: 'Qua', date: 22, active: false },
-  { day: 'Qui', date: 23, active: false },
-  { day: 'Sex', date: 24, active: false },
-  { day: 'Sáb', date: 25, active: false },
-];
-
-const events = [
-  {
-    id: 1,
-    time: '09:00',
-    end:  '10:30',
-    title: 'Review Mensal com IA Agent',
-    description: 'Análise preditiva de fluxo de caixa para o Q4 e ajustes de orçamento operacional.',
-    tag: 'IA',
-    tagColor: 'bg-primary-fixed/10 text-primary-fixed',
-    done: true,
-  },
-  {
-    id: 2,
-    time: '12:00',
-    end:  '13:00',
-    title: 'Almoço com Sócios',
-    description: 'Discussão sobre expansão do portfólio de investimentos para Q1 2024.',
-    tag: 'Reunião',
-    tagColor: 'bg-surface-container-highest text-on-surface-variant',
-    done: false,
-  },
-  {
-    id: 3,
-    time: '14:00',
-    end:  '15:00',
-    title: 'Aprovação de Reembolsos',
-    description: 'Verificar solicitações da equipe de vendas pendentes no WhatsApp.',
-    tag: 'Aprovação',
-    tagColor: 'bg-error/10 text-error',
-    done: false,
-  },
-  {
-    id: 4,
-    time: '16:00',
-    end:  '16:30',
-    title: 'Sync com Contador',
-    description: 'Alinhamento sobre obrigações fiscais do trimestre e DAS MEI.',
-    tag: 'Fiscal',
-    tagColor: 'bg-surface-container-highest text-on-surface-variant',
-    done: false,
-  },
-  {
-    id: 5,
-    time: '17:30',
-    end:  null,
-    title: 'Fechamento do Dia',
-    description: 'Sincronização automática de extratos bancários via integração whats-finance.',
-    tag: 'Auto',
-    tagColor: 'bg-primary-fixed/10 text-primary-fixed',
-    done: false,
-  },
-];
+const today = new Date().toISOString().split('T')[0];
 
 const Agenda = ({ openEvent }) => {
-  const [selectedDay, setSelectedDay] = useState(21);
+  const { user } = useAuth();
+  const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [mode, setMode] = useState('dia'); // 'dia' | 'periodo'
+  const [selectedDate, setSelectedDate] = useState(today);
+  const [startDate, setStartDate] = useState(today);
+  const [endDate, setEndDate] = useState(today);
+
+  const days = useMemo(() => {
+    const base = new Date();
+    const startOfWeek = new Date(base);
+    startOfWeek.setDate(base.getDate() - base.getDay());
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(startOfWeek);
+      d.setDate(startOfWeek.getDate() + i);
+      return {
+        day: d.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', ''),
+        date: d.getDate(),
+        fullDate: d.toISOString().split('T')[0],
+        isToday: d.toISOString().split('T')[0] === today,
+      };
+    });
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [user, mode, selectedDate, startDate, endDate]);
+
+  async function load() {
+    if (!user) return;
+    setLoading(true);
+    try {
+      let data;
+      if (mode === 'dia') {
+        data = await getEventsByDate(user.id, selectedDate);
+      } else {
+        if (endDate < startDate) return;
+        data = await getEventsByDateRange(user.id, startDate, endDate);
+      }
+      setEvents(data);
+    } catch (err) {
+      console.error('Erro ao carregar eventos:', err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const formatEventDate = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' });
+  };
+
+  const periodoLabel = mode === 'dia'
+    ? new Date(selectedDate + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
+    : `${new Date(startDate + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })} → ${new Date(endDate + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}`;
 
   return (
     <main className="pt-24 pb-32 px-6 max-w-7xl mx-auto">
@@ -74,13 +71,11 @@ const Agenda = ({ openEvent }) => {
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
         <div>
           <p className="font-label text-[10px] uppercase tracking-[0.2em] text-on-surface-variant mb-1">
-            Outubro 2023
+            {periodoLabel}
           </p>
-          <h2 className="font-headline font-extrabold text-3xl text-on-surface tracking-[-0.04em]">
-            Agenda
-          </h2>
+          <h2 className="font-headline font-extrabold text-3xl text-on-surface tracking-[-0.04em]">Agenda</h2>
         </div>
-        <button 
+        <button
           onClick={openEvent}
           className="self-start flex items-center gap-2 px-4 py-2 rounded-xl bg-primary-fixed text-on-primary font-bold hover:brightness-110 transition-all active:scale-95"
         >
@@ -89,147 +84,149 @@ const Agenda = ({ openEvent }) => {
         </button>
       </div>
 
-      {/* ── Seletor de semana ── */}
-      <div className="flex gap-2 mb-10 overflow-x-auto pb-1">
-        {days.map(({ day, date, active: defaultActive }) => {
-          const isSelected = selectedDay === date;
-          return (
-            <button
-              key={date}
-              onClick={() => setSelectedDay(date)}
-              className={`flex flex-col items-center gap-1.5 px-4 py-3 rounded-xl min-w-[56px] transition-all active:scale-95 ${
-                isSelected
-                  ? 'bg-primary-fixed text-on-primary'
-                  : 'bg-surface-container-low text-on-surface-variant hover:bg-surface-container'
-              }`}
-            >
-              <span className="font-label text-[9px] uppercase tracking-widest">{day}</span>
-              <span className={`font-headline font-bold text-lg leading-none ${isSelected ? 'text-on-primary' : 'text-on-surface'}`}>
-                {date}
-              </span>
-              {defaultActive && !isSelected && (
-                <span className="w-1.5 h-1.5 rounded-full bg-primary-fixed" />
-              )}
-            </button>
-          );
-        })}
+      {/* ── Toggle modo ── */}
+      <div className="flex bg-on-surface/5 rounded-xl p-1 mb-6 w-fit">
+        {[{ key: 'dia', label: 'Por dia', icon: 'today' }, { key: 'periodo', label: 'Por período', icon: 'date_range' }].map(({ key, label, icon }) => (
+          <button
+            key={key}
+            onClick={() => setMode(key)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-label text-[10px] uppercase tracking-widest font-bold transition-all ${
+              mode === key
+                ? 'bg-primary-fixed text-on-primary shadow'
+                : 'text-on-surface-variant hover:text-on-surface'
+            }`}
+          >
+            <Icon name={icon} className="text-[16px]" />
+            {label}
+          </button>
+        ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-
-        {/* ── Timeline ── */}
-        <section className="lg:col-span-7">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="font-headline font-bold text-xl text-on-surface tracking-tight">
-              {selectedDay === 21 ? 'Hoje' : `${selectedDay} Out`} — {events.length} eventos
-            </h3>
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-primary-fixed animate-pulse" />
-              <span className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant">
-                Ao vivo
-              </span>
+      <AnimatePresence mode="wait">
+        {mode === 'dia' ? (
+          <motion.div key="dia" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
+            {/* Seletor de semana */}
+            <div className="flex gap-2 mb-10 overflow-x-auto pb-1">
+              {days.map(({ day, date, fullDate, isToday }) => {
+                const isSelected = selectedDate === fullDate;
+                return (
+                  <button
+                    key={fullDate}
+                    onClick={() => setSelectedDate(fullDate)}
+                    className={`flex flex-col items-center gap-1.5 px-4 py-3 rounded-xl min-w-[56px] transition-all active:scale-95 ${
+                      isSelected
+                        ? 'bg-primary-fixed text-on-primary shadow-lg shadow-primary-fixed/20'
+                        : 'bg-surface-container-low text-on-surface-variant hover:bg-surface-container border border-outline-variant/10'
+                    }`}
+                  >
+                    <span className="font-label text-[9px] uppercase tracking-widest">{day}</span>
+                    <span className={`font-headline font-bold text-lg leading-none ${isSelected ? 'text-on-primary' : 'text-on-surface'}`}>
+                      {date}
+                    </span>
+                    {isToday && !isSelected && <span className="w-1.5 h-1.5 rounded-full bg-primary-fixed" />}
+                  </button>
+                );
+              })}
             </div>
-          </div>
+          </motion.div>
+        ) : (
+          <motion.div key="periodo" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
+            {/* Seletor de período */}
+            <div className="flex flex-col sm:flex-row gap-3 mb-10">
+              <div className="flex-1 space-y-1">
+                <label className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant ml-1">Data início</label>
+                <input
+                  type="date"
+                  value={startDate}
+                  max={endDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="w-full h-12 bg-on-surface/5 border border-outline-variant/10 rounded-xl px-4 text-on-surface font-body text-sm outline-none focus:border-primary-fixed/40 transition-all"
+                />
+              </div>
+              <div className="flex items-end pb-0 sm:pb-0 justify-center">
+                <div className="h-12 flex items-center">
+                  <Icon name="arrow_forward" className="text-on-surface-variant text-base" />
+                </div>
+              </div>
+              <div className="flex-1 space-y-1">
+                <label className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant ml-1">Data fim</label>
+                <input
+                  type="date"
+                  value={endDate}
+                  min={startDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="w-full h-12 bg-on-surface/5 border border-outline-variant/10 rounded-xl px-4 text-on-surface font-body text-sm outline-none focus:border-primary-fixed/40 transition-all"
+                />
+              </div>
+              <div className="flex items-end">
+                <button
+                  onClick={load}
+                  className="h-12 px-5 rounded-xl bg-primary-fixed text-on-primary font-label text-[10px] uppercase tracking-widest font-bold hover:brightness-110 active:scale-95 transition-all"
+                >
+                  Buscar
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
+      {/* ── Timeline ── */}
+      <section>
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="font-headline font-bold text-xl text-on-surface tracking-tight">
+            {events.length} {events.length === 1 ? 'evento' : 'eventos'}
+          </h3>
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary-fixed animate-pulse" />
+            <span className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant">Sincronizado</span>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="py-20 text-center">
+            <div className="w-8 h-8 border-2 border-primary-fixed/30 border-t-primary-fixed rounded-full animate-spin mx-auto" />
+          </div>
+        ) : events.length > 0 ? (
           <div className="relative pl-8 space-y-6 before:content-[''] before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-[1px] before:bg-outline-variant/20">
             {events.map((e) => (
               <div key={e.id} className="relative group">
-                <div className={`absolute -left-8 top-1 w-[23px] h-[23px] rounded-full z-10 border-2 transition-colors ${
-                  e.done
-                    ? 'bg-primary-fixed border-primary-fixed'
-                    : 'bg-surface-dim border-outline-variant group-hover:border-primary-fixed/50'
-                }`}>
-                  {e.done && (
-                    <Icon name="check" className="text-on-primary absolute inset-0 flex items-center justify-center" style={{ fontSize: 13, lineHeight: '19px', paddingLeft: 2 }} />
-                  )}
-                </div>
-
-                <div className="p-4 rounded-xl bg-surface-container-low hover:bg-surface-container transition-colors cursor-pointer">
+                <div className="absolute -left-8 top-1 w-[23px] h-[23px] rounded-full z-10 border-2 transition-colors bg-surface-dim border-outline-variant group-hover:border-primary-fixed/50" />
+                <div className="p-4 rounded-xl bg-surface-container-low hover:bg-surface-container transition-colors cursor-pointer border border-outline-variant/5">
                   <div className="flex items-start justify-between gap-3 mb-2">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {mode === 'periodo' && (
+                        <span className="font-label text-[9px] uppercase tracking-widest text-on-surface-variant bg-surface-container px-2 py-0.5 rounded-full">
+                          {formatEventDate(e.data_inicio)}
+                        </span>
+                      )}
                       <span className="font-label text-[10px] uppercase tracking-[0.1em] text-primary-fixed font-bold">
-                        {e.time}{e.end ? ` – ${e.end}` : ''}
+                        {e.horario || (e.data_inicio ? new Date(e.data_inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '')}
                       </span>
-                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-tighter ${e.tagColor}`}>
-                        {e.tag}
-                      </span>
+                      {e.tag && (
+                        <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-tighter bg-surface-container-highest text-on-surface-variant">
+                          {e.tag}
+                        </span>
+                      )}
                     </div>
                     <Icon name="chevron_right" className="text-on-surface-variant text-base shrink-0 mt-0.5" />
                   </div>
-                  <h4 className="font-body font-semibold text-on-surface text-sm mb-1">{e.title}</h4>
-                  <p className="text-on-surface-variant text-xs leading-relaxed">{e.description}</p>
+                  <h4 className="font-body font-semibold text-on-surface text-sm mb-1">{e.titulo}</h4>
+                  <p className="text-on-surface-variant text-xs leading-relaxed">{e.descricao}</p>
                 </div>
               </div>
             ))}
           </div>
-        </section>
-
-        {/* ── Resumo do dia ── */}
-        <section className="lg:col-span-5 space-y-4">
-          <h3 className="font-headline font-bold text-xl text-on-surface tracking-tight mb-6">
-            Resumo do Dia
-          </h3>
-
-          <div className="p-5 rounded-xl bg-surface-container-low">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-9 h-9 rounded-lg bg-primary-fixed/10 flex items-center justify-center">
-                <Icon name="smart_toy" className="text-primary-fixed text-[18px]" />
-              </div>
-              <div>
-                <p className="font-body font-semibold text-on-surface text-sm">Agente IA ativo</p>
-                <p className="text-on-surface-variant text-xs">Monitorando agenda</p>
-              </div>
-            </div>
-            <p className="text-on-surface-variant text-xs leading-relaxed">
-              Você tem <span className="text-primary-fixed font-semibold">5 eventos</span> hoje.
-              1 reunião de IA às 09:00 e 1 aprovação financeira às 14:00 requerem sua atenção.
-            </p>
+        ) : (
+          <div className="py-20 text-center bg-surface-container-low rounded-2xl border border-dashed border-outline-variant/20">
+            <Icon name="event_busy" className="text-on-surface-variant/40 text-4xl mb-4" />
+            <p className="text-on-surface-variant text-sm px-10">Nenhum compromisso encontrado neste período.</p>
+            <button onClick={openEvent} className="mt-4 text-primary-fixed font-label text-[10px] uppercase tracking-widest font-bold hover:underline">
+              Criar evento agora
+            </button>
           </div>
-
-          <div className="p-5 rounded-xl glass-panel border border-outline-variant/10">
-            <p className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant mb-3">
-              Distribuição de tempo
-            </p>
-            <div className="space-y-3">
-              {[
-                { label: 'Reuniões',   pct: 60, color: 'bg-primary-fixed' },
-                { label: 'Revisões',   pct: 25, color: 'bg-on-surface-variant' },
-                { label: 'Automático', pct: 15, color: 'bg-secondary-container' },
-              ].map(({ label, pct, color }) => (
-                <div key={label}>
-                  <div className="flex justify-between mb-1">
-                    <span className="text-on-surface-variant text-xs">{label}</span>
-                    <span className="font-label text-[10px] text-on-surface-variant">{pct}%</span>
-                  </div>
-                  <div className="h-1.5 rounded-full bg-surface-container-highest overflow-hidden">
-                    <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="p-5 rounded-xl bg-surface-container-low">
-            <p className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant mb-3">
-              Próximos dias
-            </p>
-            {[
-              { date: '22 Out', title: 'Vencimento Google Cloud', icon: 'cloud_queue' },
-              { date: '25 Out', title: 'Vencimento Aluguel',       icon: 'store'       },
-              { date: '31 Out', title: 'Fechamento Mensal',         icon: 'analytics'   },
-            ].map(({ date, title, icon }) => (
-              <div key={date} className="flex items-center gap-3 py-2.5 border-b border-outline-variant/10 last:border-0">
-                <Icon name={icon} className="text-on-surface-variant text-[18px]" />
-                <div>
-                  <p className="text-on-surface text-xs font-semibold">{title}</p>
-                  <p className="text-on-surface-variant text-[10px]">{date}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-      </div>
+        )}
+      </section>
     </main>
   );
 };

@@ -53,7 +53,7 @@ const App = () => {
 
   return (
     <div className={`font-body text-on-surface antialiased bg-primary-fixed/5 min-h-screen relative overflow-x-hidden ${isDarkMode ? '' : 'light-mode'}`}>
-      <Header isDarkMode={isDarkMode} toggleTheme={toggleTheme} />
+      <Header isDarkMode={isDarkMode} toggleTheme={toggleTheme} onLogoClick={() => setActiveTab('painel')} />
       {renderPage()}
       <BottomNav active={activeTab} onChange={setActiveTab} />
 
@@ -61,7 +61,10 @@ const App = () => {
       <AnimatePresence>
         {transactionModal && (
           <Lancamento 
-            type={transactionModal} 
+            initialData={typeof transactionModal === 'object' ? transactionModal : null}
+            type={typeof transactionModal === 'object' 
+              ? (transactionModal.tipo === 'RECEBER' ? 'income' : 'expense') 
+              : transactionModal} 
             onBack={() => setTransactionModal(null)} 
           />
         )}

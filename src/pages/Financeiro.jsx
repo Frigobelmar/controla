@@ -1,36 +1,65 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { AnimatePresence } from 'framer-motion';
 import Icon from '../components/Icon';
-
-const transactions = [
-  { id: 1, name: 'Salário Mensal',       category: 'Trabalho',     date: 'Hoje',    amount: '+R$ 8.500,00',  type: 'income',  icon: 'payments'         },
-  { id: 2, name: 'Energia Elétrica',     category: 'Moradia',      date: 'Hoje',    amount: '-R$ 1.240,50',  type: 'expense', icon: 'electric_bolt'    },
-  { id: 3, name: 'Assinatura Google',    category: 'Tecnologia',   date: 'Ontem',   amount: '-R$ 450,00',    type: 'expense', icon: 'cloud_queue'      },
-  { id: 4, name: 'Dividendos B3',        category: 'Investimento', date: '05 Out',  amount: '+R$ 320,75',    type: 'income',  icon: 'trending_up'      },
-  { id: 5, name: 'Supermercado',         category: 'Alimentação',  date: '04 Out',  amount: '-R$ 387,20',    type: 'expense', icon: 'shopping_cart'    },
-  { id: 6, name: 'Aluguel Escritório',   category: 'Moradia',      date: '03 Out',  amount: '-R$ 5.800,00',  type: 'expense', icon: 'store'            },
-  { id: 7, name: 'Freelance - Design',   category: 'Trabalho',     date: '02 Out',  amount: '+R$ 2.400,00',  type: 'income',  icon: 'brush'            },
-  { id: 8, name: 'Combustível',          category: 'Transporte',   date: '01 Out',  amount: '-R$ 210,00',    type: 'expense', icon: 'local_gas_station'},
-];
+import GerenciarCategorias from '../components/GerenciarCategorias';
+import { useAuth } from '../contexts/AuthContext';
+import { getTransactions, getSummaryStats } from '../lib/database';
 
 const filters = ['Todos', 'Receitas', 'Despesas'];
 
 const Financeiro = ({ setTab, openTransaction }) => {
+  const { user } = useAuth();
   const [activeFilter, setActiveFilter] = useState('Todos');
+  const [transactions, setTransactions] = useState([]);
+  const [stats, setStats] = useState({ saldo: 0, receitas: 0, despesas: 0 });
+  const [loading, setLoading] = useState(true);
+  const [isCategoriasOpen, setIsCategoriasOpen] = useState(false);
 
-  const filtered = transactions.filter((t) => {
-    if (activeFilter === 'Receitas') return t.type === 'income';
-    if (activeFilter === 'Despesas') return t.type === 'expense';
-    return true;
-  });
+  useEffect(() => {
+    async function loadData() {
+      if (!user) return;
+      setLoading(true);
+      try {
+        const [txData, statsData] = await Promise.all([
+          getTransactions(user.id, { type: activeFilter }),
+          getSummaryStats(user.id)
+        ]);
+        setTransactions(txData);
+        setStats(statsData);
+      } catch (err) {
+        console.error('Erro ao carregar dados financeiros:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, [user, activeFilter]);
+
+  const formatCurrency = (val) => {
+    return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  };
+
+  const formatDate = (dateStr) => {
+    const date = new Date(dateStr);
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+
+    if (date.toDateString() === today.toDateString()) return 'Hoje';
+    if (date.toDateString() === yesterday.toDateString()) return 'Ontem';
+    
+    return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+  };
 
   return (
+    <>
     <main className="pt-24 pb-32 px-6 max-w-7xl mx-auto">
 
       {/* ── Header da página ── */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-10">
         <div>
           <p className="font-label text-[10px] uppercase tracking-[0.2em] text-on-surface-variant mb-1">
-            Outubro 2023
+            {new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
           </p>
           <h2 className="font-headline font-extrabold text-3xl text-on-surface tracking-[-0.04em]">
             Extrato Financeiro
@@ -51,7 +80,11 @@ const Financeiro = ({ setTab, openTransaction }) => {
             <Icon name="add_circle_outline" className="text-base" />
             <span className="font-label text-[10px] uppercase tracking-widest font-bold">Receita</span>
           </button>
-          <button className="flex items-center justify-center w-10 h-10 rounded-xl bg-surface-container-high border border-outline-variant/20 text-on-surface-variant hover:text-white transition-all">
+          <button
+            onClick={() => setIsCategoriasOpen(true)}
+            title="Gerenciar Categorias"
+            className="flex items-center justify-center w-10 h-10 rounded-xl bg-surface-container-high border border-outline-variant/20 text-on-surface-variant hover:text-on-surface hover:border-primary-fixed/30 transition-all"
+          >
             <Icon name="tune" className="text-base" />
           </button>
         </div>
@@ -63,12 +96,12 @@ const Financeiro = ({ setTab, openTransaction }) => {
           <div className="md:col-span-1 p-6 rounded-xl bg-surface-container-low relative overflow-hidden">
             <div className="absolute top-0 right-0 w-32 h-32 bg-primary-fixed/5 rounded-full blur-3xl -mr-10 -mt-10" />
             <p className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant mb-2">Saldo do Mês</p>
-            <p className="font-headline font-extrabold text-3xl text-primary-fixed text-glow tracking-[-0.04em]">
-              +R$ 3.332,05
+            <p className={`font-headline font-extrabold text-3xl text-glow tracking-[-0.04em] ${stats.saldo >= 0 ? 'text-primary-fixed' : 'text-error'}`}>
+              {loading ? '...' : formatCurrency(stats.saldo)}
             </p>
-            <div className="flex items-center gap-1.5 mt-2 text-primary-fixed-dim text-xs">
-              <Icon name="trending_up" className="text-sm" />
-              <span>Positivo este mês</span>
+            <div className={`flex items-center gap-1.5 mt-2 text-xs ${stats.saldo >= 0 ? 'text-primary-fixed-dim' : 'text-error/70'}`}>
+              <Icon name={stats.saldo >= 0 ? 'trending_up' : 'trending_down'} className="text-sm" />
+              <span>{stats.saldo >= 0 ? 'Positivo este mês' : 'Negativo este mês'}</span>
             </div>
           </div>
 
@@ -77,8 +110,10 @@ const Financeiro = ({ setTab, openTransaction }) => {
               <p className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant">Entradas</p>
               <Icon name="arrow_upward" className="text-primary-fixed" />
             </div>
-            <p className="font-headline font-bold text-2xl text-on-surface">R$ 11.220,75</p>
-            <p className="text-on-surface-variant text-xs mt-1">3 transações</p>
+            <p className="font-headline font-bold text-2xl text-on-surface">
+              {loading ? '...' : formatCurrency(stats.receitas)}
+            </p>
+            <p className="text-on-surface-variant text-xs mt-1">Total acumulado</p>
           </div>
 
           <div className="p-6 rounded-xl glass-panel border border-outline-variant/10">
@@ -86,8 +121,10 @@ const Financeiro = ({ setTab, openTransaction }) => {
               <p className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant">Saídas</p>
               <Icon name="arrow_downward" className="text-error" />
             </div>
-            <p className="font-headline font-bold text-2xl text-on-surface">R$ 8.087,70</p>
-            <p className="text-on-surface-variant text-xs mt-1">5 transações</p>
+            <p className="font-headline font-bold text-2xl text-on-surface">
+              {loading ? '...' : formatCurrency(stats.despesas)}
+            </p>
+            <p className="text-on-surface-variant text-xs mt-1">Total de gastos</p>
           </div>
         </div>
       </section>
@@ -116,42 +153,61 @@ const Financeiro = ({ setTab, openTransaction }) => {
             Histórico de Transações
           </h3>
           <span className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant">
-            {filtered.length} registros
+            {transactions.length} registros
           </span>
         </div>
 
         <div className="space-y-3">
-          {filtered.map((t) => (
-            <div
-              key={t.id}
-              className="group flex items-center justify-between p-4 bg-surface-container-low rounded-lg hover:bg-surface-container transition-colors cursor-pointer"
-            >
-              <div className="flex items-center gap-4">
-                <div className={`w-10 h-10 flex items-center justify-center rounded-lg ${
-                  t.type === 'income'
-                    ? 'bg-primary-fixed/10 text-primary-fixed'
-                    : 'bg-error/10 text-error'
-                }`}>
-                  <Icon name={t.icon} className="text-[18px]" />
-                </div>
-                <div>
-                  <p className="font-body font-semibold text-on-surface text-sm">{t.name}</p>
-                  <p className="text-on-surface-variant text-xs">
-                    {t.category} · {t.date}
-                  </p>
-                </div>
-              </div>
-              <p className={`font-headline font-bold text-sm ${
-                t.type === 'income' ? 'text-primary-fixed' : 'text-error'
-              }`}>
-                {t.amount}
-              </p>
+          {loading ? (
+            <div className="py-20 text-center">
+              <div className="w-8 h-8 border-2 border-primary-fixed/30 border-t-primary-fixed rounded-full animate-spin mx-auto" />
             </div>
-          ))}
+          ) : transactions.length > 0 ? (
+            transactions.map((t) => (
+              <div
+                key={t.id}
+                onClick={() => openTransaction(t)}
+                className="group flex items-center justify-between p-4 bg-surface-container-low rounded-lg hover:bg-surface-container transition-colors cursor-pointer"
+              >
+                <div className="flex items-center gap-4">
+                  <div className={`w-10 h-10 flex items-center justify-center rounded-lg ${
+                    t.tipo === 'RECEBER'
+                      ? 'bg-primary-fixed/10 text-primary-fixed'
+                      : 'bg-error/10 text-error'
+                  }`}>
+                    <Icon name={t.categorias?.icone || (t.tipo === 'RECEBER' ? 'add_circle' : 'remove_circle')} className="text-[18px]" />
+                  </div>
+                  <div>
+                    <p className="font-body font-semibold text-on-surface text-sm">{t.descricao}</p>
+                    <p className="text-on-surface-variant text-xs">
+                      {t.categorias?.nome || 'Sem categoria'} · {formatDate(t.data_vencimento)}
+                    </p>
+                  </div>
+                </div>
+                <p className={`font-headline font-bold text-sm ${
+                  t.tipo === 'RECEBER' ? 'text-primary-fixed' : 'text-error'
+                }`}>
+                  {t.tipo === 'RECEBER' ? '+' : '-'} {formatCurrency(t.valor)}
+                </p>
+              </div>
+            ))
+          ) : (
+            <div className="py-20 text-center bg-surface-container-low rounded-xl border border-dashed border-outline-variant/20">
+              <Icon name="history" className="text-on-surface-variant/40 text-4xl mb-4" />
+              <p className="text-on-surface-variant text-sm">Nenhuma transação encontrada.</p>
+            </div>
+          )}
         </div>
       </section>
 
     </main>
+
+    <AnimatePresence>
+      {isCategoriasOpen && (
+        <GerenciarCategorias onClose={() => setIsCategoriasOpen(false)} />
+      )}
+    </AnimatePresence>
+    </>
   );
 };
 

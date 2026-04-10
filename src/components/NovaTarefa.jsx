@@ -1,11 +1,15 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import Icon from './Icon';
+import { useAuth } from '../contexts/AuthContext';
+import { saveTask } from '../lib/database';
 
 const NovaTarefa = ({ onBack }) => {
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
-    dueDate: '',
+    dueDate: new Date().toISOString().split('T')[0],
     dueTime: '',
     priority: 'Média',
     tag: 'Financeiro',
@@ -25,11 +29,20 @@ const NovaTarefa = ({ onBack }) => {
     { label: 'Outros', icon: 'more_horiz' },
   ];
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log('Tarefa salva:', formData);
-    // Aqui no futuro adicionaremos a lógica de salvar no estado global ou BD
-    onBack();
+    if (!user || loading) return;
+
+    setLoading(true);
+    try {
+      await saveTask(user.id, formData);
+      onBack();
+    } catch (err) {
+      console.error('Erro ao salvar tarefa:', err);
+      alert('Erro ao salvar tarefa no banco de dados.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -159,9 +172,14 @@ const NovaTarefa = ({ onBack }) => {
             {/* Botão Salvar */}
             <button 
               type="submit"
+              disabled={loading}
               className="w-full py-5 rounded-2xl bg-primary-fixed text-on-primary font-headline font-bold text-lg hover:brightness-110 transition-all active:scale-[0.98] shadow-[0_10px_30px_rgba(175,255,10,0.15)] mt-4"
             >
-              Adicionar Tarefa
+              {loading ? (
+                <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin mx-auto" />
+              ) : (
+                'Adicionar Tarefa'
+              )}
             </button>
           </form>
         </div>

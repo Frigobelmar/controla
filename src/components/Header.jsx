@@ -1,13 +1,17 @@
 import React from 'react';
 import Icon from './Icon';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useAuth } from '../contexts/AuthContext';
 
-const Header = ({ isDarkMode, toggleTheme }) => (
+const Header = ({ isDarkMode, toggleTheme, onLogoClick }) => {
+  const { signOut } = useAuth();
+
+  return (
   <header className="fixed top-0 w-full z-50 glass-panel border-b-0">
     <div className="flex items-center justify-between px-6 h-16 w-full max-w-7xl mx-auto">
 
       {/* Logo Area */}
-      <div className="flex items-center group cursor-pointer">
+      <div onClick={onLogoClick} className="flex items-center group cursor-pointer active:scale-95 transition-transform duration-200">
         <h1 className="font-['Michroma'] tracking-tight text-xl md:text-2xl flex items-center leading-none">
           <span className="text-on-surface/60 group-hover:text-on-surface transition-colors duration-500">CONTROLA</span>
           <span className="text-primary-fixed ml-1 text-glow">+</span>
@@ -60,10 +64,20 @@ const Header = ({ isDarkMode, toggleTheme }) => (
         <div className="w-10 h-10 rounded-xl border border-outline-variant/10 bg-surface-container-high flex items-center justify-center cursor-pointer active:scale-95 duration-200">
           <Icon name="person" className="text-on-surface-variant" style={{ fontSize: 20 }} />
         </div>
+
+        {/* Logout */}
+        <button
+          onClick={() => signOut()}
+          title="Sair"
+          className="w-10 h-10 rounded-xl bg-error/10 border border-error/20 flex items-center justify-center active:scale-90 duration-200 hover:bg-error/20 transition-colors"
+        >
+          <Icon name="logout" className="text-error" style={{ fontSize: 20 }} />
+        </button>
       </div>
 
     </div>
   </header>
-);
+  );
+};
 
 export default Header;
