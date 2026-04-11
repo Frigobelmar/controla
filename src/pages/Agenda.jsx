@@ -4,7 +4,7 @@ import Icon from '../components/Icon';
 import { useAuth } from '../contexts/AuthContext';
 import { getEventsByDate, getEventsByDateRange } from '../lib/database';
 
-const today = new Date().toISOString().split('T')[0];
+const today = new Date().toLocaleDateString('sv-SE');
 
 const Agenda = ({ openEvent }) => {
   const { user } = useAuth();
@@ -22,11 +22,12 @@ const Agenda = ({ openEvent }) => {
     return Array.from({ length: 7 }, (_, i) => {
       const d = new Date(startOfWeek);
       d.setDate(startOfWeek.getDate() + i);
+      const isoDate = d.toLocaleDateString('sv-SE');
       return {
         day: d.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', ''),
         date: d.getDate(),
-        fullDate: d.toISOString().split('T')[0],
-        isToday: d.toISOString().split('T')[0] === today,
+        fullDate: isoDate,
+        isToday: isoDate === today,
       };
     });
   }, []);

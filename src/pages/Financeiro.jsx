@@ -40,7 +40,8 @@ const Financeiro = ({ setTab, openTransaction }) => {
   };
 
   const formatDate = (dateStr) => {
-    const date = new Date(dateStr);
+    // Adiciona T12:00:00 para evitar que o fuso horário mude o dia
+    const date = new Date(dateStr + 'T12:00:00');
     const today = new Date();
     const yesterday = new Date();
     yesterday.setDate(today.getDate() - 1);

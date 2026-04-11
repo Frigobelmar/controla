@@ -9,7 +9,7 @@ const Lancamento = ({ type = 'expense', onBack, initialData = null }) => {
   const [value, setValue] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(new Date().toLocaleDateString('sv-SE'));
   const [repetitionType, setRepetitionType] = useState('single'); // single, fixed, installments
   const [numInstallments, setNumInstallments] = useState('2');
   const [dbCategories, setDbCategories] = useState([]);
@@ -35,7 +35,7 @@ const Lancamento = ({ type = 'expense', onBack, initialData = null }) => {
     if (initialData) {
       setDescription(initialData.descricao || '');
       setCategory(initialData.categoria_id || '');
-      setDate(initialData.data_vencimento || new Date().toISOString().split('T')[0]);
+      setDate(initialData.data_vencimento || new Date().toLocaleDateString('sv-SE'));
       
       // Formata o valor inicial para R$
       if (initialData.valor) {

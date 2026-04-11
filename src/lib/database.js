@@ -242,7 +242,7 @@ export async function getSummaryStats(userId) {
   // Simplificação: pega as transações do mês atual para os cards
   const startOfMonth = new Date();
   startOfMonth.setDate(1);
-  const startISO = startOfMonth.toISOString().split('T')[0];
+  const startISO = startOfMonth.toLocaleDateString('sv-SE');
 
   const { data, error } = await supabase
     .from('transacoes_financeiras')

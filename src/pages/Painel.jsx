@@ -3,7 +3,7 @@ import Icon from '../components/Icon';
 import { useAuth } from '../contexts/AuthContext';
 import { getSummaryStats, getUpcomingTransactions, getEventsByDate } from '../lib/database';
 
-const today = new Date().toISOString().split('T')[0];
+const today = new Date().toLocaleDateString('sv-SE');
 
 const formatCurrency = (val) =>
   Number(val).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -12,10 +12,14 @@ const formatDate = (dateStr) => {
   if (!dateStr) return '';
   const d = new Date(dateStr + 'T12:00:00');
   const todayDate = new Date();
-  todayDate.setHours(0, 0, 0, 0);
-  const diff = Math.round((d - todayDate) / 86400000);
+  todayDate.setHours(12, 0, 0, 0); // Alinhando com d para cálculo preciso
+  
+  const diffInMs = d.getTime() - todayDate.getTime();
+  const diff = Math.round(diffInMs / 86400000);
+  
   if (diff === 0) return 'Hoje';
   if (diff === 1) return 'Amanhã';
+  if (diff === -1) return 'Ontem';
   if (diff > 1 && diff <= 7) return `Em ${diff} dias`;
   return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
 };
