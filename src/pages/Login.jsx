@@ -20,7 +20,7 @@ const Login = () => {
   const [timeLeft, setTimeLeft] = useState(60);
   const [canResend, setCanResend] = useState(false);
   
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, signOut } = useAuth();
 
   // Timer para expiração do código
   React.useEffect(() => {
