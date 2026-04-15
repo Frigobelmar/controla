@@ -4,7 +4,7 @@ import Icon from '../components/Icon';
 import GerenciarCategorias from '../components/GerenciarCategorias';
 import { BancoBadge, BANCOS } from '../components/GerenciarContas';
 import { useAuth } from '../contexts/AuthContext';
-import { getTransactions, getSummaryStats, getCategorySpending, recordPartialPayment, updateTransaction } from '../lib/database';
+import { getTransactions, getSummaryStats, getCategorySpending, recordPartialPayment, updateTransaction, getCategories } from '../lib/database';
 import ModalPagamento from '../components/ModalPagamento';
 import { formatDate } from '../lib/utils';
 
@@ -98,17 +98,53 @@ const Financeiro = ({ setTab, openTransaction }) => {
   const [pagamentoTx, setPagamentoTx] = useState(null);
   const [loadingPagamento, setLoadingPagamento] = useState(false);
 
+  // Novos filtros
+  const [selectedStatus, setSelectedStatus] = useState('Todos');
+  const [selectedCategory, setSelectedCategory] = useState('Todos');
+  const [periodType, setPeriodType] = useState('Mês'); // Todos, Mês, 7dias, 30dias, Custom
+  const [customDates, setCustomDates] = useState({ start: '', end: '' });
+  const [allCategories, setAllCategories] = useState([]);
+
   useEffect(() => {
     async function loadData() {
       if (!user) return;
       setLoading(true);
       try {
-        const [txData, statsData] = await Promise.all([
-          getTransactions(user.id, { type: activeFilter }),
-          getSummaryStats(user.id)
+        let startDate = null;
+        let endDate = null;
+
+        if (periodType === 'Mês') {
+          const start = new Date();
+          start.setDate(1);
+          startDate = start.toISOString().split('T')[0];
+        } else if (periodType === '7dias') {
+          const start = new Date();
+          start.setDate(start.getDate() - 7);
+          startDate = start.toISOString().split('T')[0];
+        } else if (periodType === '30dias') {
+          const start = new Date();
+          start.setDate(start.getDate() - 30);
+          startDate = start.toISOString().split('T')[0];
+        } else if (periodType === 'Custom') {
+          startDate = customDates.start;
+          endDate = customDates.end;
+        }
+
+        const [txData, statsData, catsData] = await Promise.all([
+          getTransactions(user.id, { 
+            type: activeFilter,
+            status: selectedStatus,
+            categoryId: selectedCategory === 'Todos' ? null : selectedCategory,
+            startDate,
+            endDate
+          }),
+          getSummaryStats(user.id),
+          getCategories(user.id)
         ]);
+
         setTransactions(txData);
         setStats(statsData);
+        setAllCategories(catsData);
       } catch (err) {
         console.error('Erro ao carregar dados financeiros:', err);
       } finally {
@@ -116,7 +152,7 @@ const Financeiro = ({ setTab, openTransaction }) => {
       }
     }
     loadData();
-  }, [user, activeFilter]);
+  }, [user, activeFilter, selectedStatus, selectedCategory, periodType, customDates]);
 
   // Carrega dados de metas quando a aba é aberta
   useEffect(() => {
@@ -276,21 +312,99 @@ const Financeiro = ({ setTab, openTransaction }) => {
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.2 }}
             >
-              {/* Filtros */}
-              <div className="flex gap-2 mb-6">
-                {filters.map((f) => (
-                  <button
-                    key={f}
-                    onClick={() => setActiveFilter(f)}
-                    className={`px-4 py-1.5 rounded-full font-label text-[10px] uppercase tracking-widest transition-all ${
-                      activeFilter === f
-                        ? 'bg-primary-fixed text-on-primary font-bold'
-                        : 'bg-surface-container-high text-on-surface-variant hover:text-on-surface border border-outline-variant/20'
-                    }`}
-                  >
-                    {f}
-                  </button>
-                ))}
+              {/* Filtros Avançados */}
+              <div className="space-y-4 mb-8">
+                {/* Linha 1: Tipo e Status */}
+                <div className="flex flex-wrap items-center gap-4">
+                  <div className="flex bg-surface-container-high/50 p-1 rounded-xl border border-outline-variant/10">
+                    {filters.map((f) => (
+                      <button
+                        key={f}
+                        onClick={() => setActiveFilter(f)}
+                        className={`px-4 py-1.5 rounded-lg font-label text-[10px] uppercase tracking-widest transition-all ${
+                          activeFilter === f
+                            ? 'bg-primary-fixed text-on-primary font-bold shadow-sm'
+                            : 'text-on-surface-variant hover:text-on-surface'
+                        }`}
+                      >
+                        {f}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="flex bg-surface-container-high/50 p-1 rounded-xl border border-outline-variant/10">
+                    {['Todos', 'Pago', 'Pendente'].map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => setSelectedStatus(s)}
+                        className={`px-4 py-1.5 rounded-lg font-label text-[10px] uppercase tracking-widest transition-all ${
+                          selectedStatus === s
+                            ? 'bg-primary-fixed text-on-primary font-bold shadow-sm'
+                            : 'text-on-surface-variant hover:text-on-surface'
+                        }`}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Linha 2: Período e Categoria */}
+                <div className="flex flex-wrap items-center gap-4">
+                  {/* Seletor de Período */}
+                  <div className="flex items-center gap-2 bg-surface-container-low p-1.5 rounded-xl border border-outline-variant/10">
+                    <Icon name="calendar_month" className="text-on-surface-variant text-sm ml-2" />
+                    <select
+                      value={periodType}
+                      onChange={(e) => setPeriodType(e.target.value)}
+                      className="bg-transparent border-none text-[10px] font-label uppercase tracking-widest text-on-surface focus:ring-0 cursor-pointer pr-8"
+                    >
+                      <option value="Tudo">Tudo</option>
+                      <option value="Mês">Este Mês</option>
+                      <option value="7dias">Últimos 7 dias</option>
+                      <option value="30dias">Últimos 30 dias</option>
+                      <option value="Custom">Personalizado</option>
+                    </select>
+                  </div>
+
+                  {/* Datas Customizadas (se selecionado) */}
+                  {periodType === 'Custom' && (
+                    <motion.div 
+                      initial={{ opacity: 0, x: -10 }} 
+                      animate={{ opacity: 1, x: 0 }}
+                      className="flex items-center gap-2"
+                    >
+                      <input
+                        type="date"
+                        value={customDates.start}
+                        onChange={(e) => setCustomDates(prev => ({ ...prev, start: e.target.value }))}
+                        className="bg-surface-container-low border border-outline-variant/10 rounded-lg px-2 py-1 text-[10px] font-body text-on-surface outline-none focus:border-primary-fixed/30"
+                      />
+                      <span className="text-on-surface-variant text-[10px]">até</span>
+                      <input
+                        type="date"
+                        value={customDates.end}
+                        onChange={(e) => setCustomDates(prev => ({ ...prev, end: e.target.value }))}
+                        className="bg-surface-container-low border border-outline-variant/10 rounded-lg px-2 py-1 text-[10px] font-body text-on-surface outline-none focus:border-primary-fixed/30"
+                      />
+                    </motion.div>
+                  )}
+
+                  {/* Seletor de Categoria */}
+                  <div className="flex items-center gap-2 bg-surface-container-low p-1.5 rounded-xl border border-outline-variant/10">
+                    <Icon name="category" className="text-on-surface-variant text-sm ml-2" />
+                    <select
+                      value={selectedCategory}
+                      onChange={(e) => setSelectedCategory(e.target.value)}
+                      className="bg-transparent border-none text-[10px] font-label uppercase tracking-widest text-on-surface focus:ring-0 cursor-pointer pr-8 max-w-[150px]"
+                    >
+                      <option value="Todos">Todas Categorias</option>
+                      {allCategories.map(cat => (
+                        <option key={cat.id} value={cat.id}>{cat.nome}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
               </div>
 
               {/* Transações */}

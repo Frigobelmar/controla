@@ -366,9 +366,23 @@ export async function getTransactions(userId, options = {}) {
     .order('data_vencimento', { ascending: false });
 
   if (options.limit) query = query.limit(options.limit);
+  
   if (options.type && options.type !== 'Todos') {
     const dbType = options.type === 'Receitas' ? 'RECEBER' : 'PAGAR';
     query = query.eq('tipo', dbType);
+  }
+
+  if (options.startDate) {
+    query = query.gte('data_vencimento', options.startDate);
+  }
+  if (options.endDate) {
+    query = query.lte('data_vencimento', options.endDate);
+  }
+  if (options.categoryId) {
+    query = query.eq('categoria_id', options.categoryId);
+  }
+  if (options.status && options.status !== 'Todos') {
+    query = query.eq('status', options.status.toUpperCase());
   }
 
   const { data, error } = await query;
