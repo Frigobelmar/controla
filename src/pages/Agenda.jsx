@@ -3,24 +3,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Icon from '../components/Icon';
 import { useAuth } from '../contexts/AuthContext';
 import { getEventsByDate, getEventsByDateRange, getUpcomingEvents } from '../lib/database';
+import { formatDate } from '../lib/utils';
 
 const today = new Date().toLocaleDateString('sv-SE');
 
-const formatDate = (dateStr) => {
-  if (!dateStr) return '';
-  const d = new Date(dateStr + 'T12:00:00');
-  const todayDate = new Date();
-  todayDate.setHours(12, 0, 0, 0);
-  
-  const diffInMs = d.getTime() - todayDate.getTime();
-  const diff = Math.round(diffInMs / 86400000);
-  
-  if (diff === 0) return 'Hoje';
-  if (diff === 1) return 'Amanhã';
-  if (diff === -1) return 'Ontem';
-  if (diff > 1 && diff <= 7) return `Em ${diff} dias`;
-  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
-};
 
 const getEventStyles = (tipo) => {
   const mapping = {

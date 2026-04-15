@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import Icon from '../components/Icon';
 import { useAuth } from '../contexts/AuthContext';
 import { getSummaryStats, getUpcomingTransactions, getUpcomingEvents } from '../lib/database';
+import { formatDate } from '../lib/utils';
 
 const today = new Date().toLocaleDateString('sv-SE');
 

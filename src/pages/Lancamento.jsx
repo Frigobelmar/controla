@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Icon from '../components/Icon';
 import { BancoBadge } from '../components/GerenciarContas';
 import { useAuth } from '../contexts/AuthContext';
-import { getCategories, saveTransaction, updateTransaction, deleteTransaction, createCategory, getContas, uploadAnexo } from '../lib/database';
+import { getCategories, saveTransaction, updateTransaction, deleteTransaction, createCategory, getContas, uploadAnexo, recordPartialPayment } from '../lib/database';
 
 const ICONES_RAPIDOS = [
   'fastfood', 'directions_car', 'home', 'school', 'local_hospital',

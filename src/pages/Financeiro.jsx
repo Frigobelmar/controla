@@ -6,6 +6,7 @@ import { BancoBadge, BANCOS } from '../components/GerenciarContas';
 import { useAuth } from '../contexts/AuthContext';
 import { getTransactions, getSummaryStats, getCategorySpending, recordPartialPayment, updateTransaction } from '../lib/database';
 import ModalPagamento from '../components/ModalPagamento';
+import { formatDate } from '../lib/utils';
 
 const filters = ['Todos', 'Receitas', 'Despesas'];
 const viewTabs = ['Extrato', 'Metas'];
@@ -133,15 +134,6 @@ const Financeiro = ({ setTab, openTransaction }) => {
   const formatCurrency = (val) =>
     Number(val).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-  const formatDate = (dateStr) => {
-    const date = new Date(dateStr + 'T12:00:00');
-    const today = new Date();
-    const yesterday = new Date();
-    yesterday.setDate(today.getDate() - 1);
-    if (date.toDateString() === today.toDateString()) return 'Hoje';
-    if (date.toDateString() === yesterday.toDateString()) return 'Ontem';
-    return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
-  };
 
   // ── Cálculos de metas agregadas ──────────────────────────────────────────
   const handlePagamento = async (txId, valor, tipo, proximaData) => {
