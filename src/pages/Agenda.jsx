@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Icon from '../components/Icon';
 import { useAuth } from '../contexts/AuthContext';
-import { getEventsByDate, getEventsByDateRange } from '../lib/database';
+import { getEventsByDate, getEventsByDateRange, getUpcomingEvents } from '../lib/database';
 
 const today = new Date().toLocaleDateString('sv-SE');
 
@@ -43,6 +43,10 @@ const Agenda = ({ openEvent }) => {
       let data;
       if (mode === 'dia') {
         data = await getEventsByDate(user.id, selectedDate);
+        // Se for hoje e estiver vazio, busca próximos
+        if (selectedDate === today && data.length === 0) {
+          data = await getUpcomingEvents(user.id, 10);
+        }
       } else {
         if (endDate < startDate) return;
         data = await getEventsByDateRange(user.id, startDate, endDate);
@@ -190,33 +194,47 @@ const Agenda = ({ openEvent }) => {
           </div>
         ) : events.length > 0 ? (
           <div className="relative pl-8 space-y-6 before:content-[''] before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-[1px] before:bg-outline-variant/20">
-            {events.map((e) => (
-              <div key={e.id} className="relative group">
-                <div className="absolute -left-8 top-1 w-[23px] h-[23px] rounded-full z-10 border-2 transition-colors bg-surface-dim border-outline-variant group-hover:border-primary-fixed/50" />
-                <div className="p-4 rounded-xl bg-surface-container-low hover:bg-surface-container transition-colors cursor-pointer border border-outline-variant/5">
-                  <div className="flex items-start justify-between gap-3 mb-2">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {mode === 'periodo' && (
-                        <span className="font-label text-[9px] uppercase tracking-widest text-on-surface-variant bg-surface-container px-2 py-0.5 rounded-full">
-                          {formatEventDate(e.data_inicio)}
+            {events.map((e) => {
+              const eventDate = e.data_inicio ? e.data_inicio.split('T')[0] : '';
+              const isEventToday = eventDate === today;
+              
+              return (
+                <div key={e.id} className="relative group">
+                  <div className={`absolute -left-8 top-1 w-[23px] h-[23px] rounded-full z-10 border-2 transition-colors ${
+                    isEventToday 
+                      ? 'bg-primary-fixed border-primary-fixed shadow-[0_0_10px_rgba(var(--primary-glow),0.4)]' 
+                      : 'bg-surface-dim border-outline-variant group-hover:border-primary-fixed/50'
+                  }`} />
+                  <div className={`p-4 rounded-xl transition-colors cursor-pointer border ${
+                    isEventToday 
+                      ? 'bg-primary-fixed/5 border-primary-fixed/20' 
+                      : 'bg-surface-container-low hover:bg-surface-container border-outline-variant/5'
+                  }`}>
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {(mode === 'periodo' || (selectedDate === today && eventDate !== today)) && (
+                          <span className="font-label text-[9px] uppercase tracking-widest text-on-surface-variant bg-surface-container px-2 py-0.5 rounded-full">
+                            {formatEventDate(e.data_inicio)}
+                          </span>
+                        )}
+                        <span className={`font-label text-[10px] uppercase tracking-[0.1em] font-bold ${isEventToday ? 'text-primary-fixed' : 'text-primary-fixed/70'}`}>
+                          {isEventToday ? 'HOJE • ' : ''}
+                          {e.horario || (e.data_inicio ? new Date(e.data_inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '')}
                         </span>
-                      )}
-                      <span className="font-label text-[10px] uppercase tracking-[0.1em] text-primary-fixed font-bold">
-                        {e.horario || (e.data_inicio ? new Date(e.data_inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '')}
-                      </span>
-                      {e.tag && (
-                        <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-tighter bg-surface-container-highest text-on-surface-variant">
-                          {e.tag}
-                        </span>
-                      )}
+                        {e.tag && (
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-tighter bg-surface-container-highest text-on-surface-variant">
+                            {e.tag}
+                          </span>
+                        )}
+                      </div>
+                      <Icon name="chevron_right" className="text-on-surface-variant text-base shrink-0 mt-0.5" />
                     </div>
-                    <Icon name="chevron_right" className="text-on-surface-variant text-base shrink-0 mt-0.5" />
+                    <h4 className={`font-body font-semibold text-sm mb-1 ${isEventToday ? 'text-on-surface' : 'text-on-surface/90'}`}>{e.titulo}</h4>
+                    <p className="text-on-surface-variant text-xs leading-relaxed">{e.descricao}</p>
                   </div>
-                  <h4 className="font-body font-semibold text-on-surface text-sm mb-1">{e.titulo}</h4>
-                  <p className="text-on-surface-variant text-xs leading-relaxed">{e.descricao}</p>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div className="py-20 text-center bg-surface-container-low rounded-2xl border border-dashed border-outline-variant/20">
