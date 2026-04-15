@@ -382,9 +382,15 @@ export async function getTransactions(userId, options = {}) {
 export async function saveEvent(userId, event) {
   const tagMapping = {
     'Reunião': 'REUNIAO_CLIENTE',
+    'Cliente': 'REUNIAO_CLIENTE',
     'IA': 'PROFISSIONAL',
-    'Fiscal': 'PROFISSIONAL',
-    'Lembrete': 'PESSOAL'
+    'Fiscal': 'PRAZO_ENTREGA',
+    'Lembrete': 'PESSOAL',
+    'Pessoal': 'PESSOAL',
+    'Saúde': 'PESSOAL',
+    'Pagar': 'PRAZO_ENTREGA',
+    'Vencimento': 'PRAZO_ENTREGA',
+    'Trabalho': 'PROFISSIONAL',
   };
   const tipo = tagMapping[event.tag] || 'PROFISSIONAL';
 
