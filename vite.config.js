@@ -8,5 +8,15 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  server: {
+    proxy: {
+      '/api/send-verification': {
+        target: 'https://teste.berthia.com.br',
+        changeOrigin: true,
+        rewrite: () => '/webhook/controla_autenticacao%20',
+        secure: true,
+      },
+    },
+  },
 })
 

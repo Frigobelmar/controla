@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import Icon from '../components/Icon';
 import { useAuth } from '../contexts/AuthContext';
-import { getSummaryStats, getUpcomingTransactions, getEventsByDate } from '../lib/database';
+import { getSummaryStats, getUpcomingTransactions, getUpcomingEvents } from '../lib/database';
 
 const today = new Date().toLocaleDateString('sv-SE');
 
@@ -38,7 +38,7 @@ const Painel = ({ setTab, openTransaction, openAI, openTask }) => {
         const [statsData, txData, evData] = await Promise.all([
           getSummaryStats(user.id),
           getUpcomingTransactions(user.id, 8),
-          getEventsByDate(user.id, today),
+          getUpcomingEvents(user.id, 6),
         ]);
         setStats(statsData);
         setTransactions(txData);
@@ -160,14 +160,17 @@ const Painel = ({ setTab, openTransaction, openAI, openTask }) => {
                         <Icon name={t.categorias?.icone || (isReceita ? 'add_circle' : 'remove_circle')} className="text-[18px]" />
                       </div>
                       <div>
-                        <p className="font-body font-semibold text-on-surface text-sm leading-tight">{t.descricao}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-body font-semibold text-on-surface text-sm leading-tight">{t.descricao}</p>
+                          {t.anexos?.length > 0 && <span className="text-[10px] opacity-40">📎</span>}
+                        </div>
                         <p className="text-on-surface-variant text-xs mt-0.5">
-                          {t.categorias?.nome || 'Sem categoria'}
+                          {t.categorias?.nome || 'Sem categoria'} • <span className={t.status === 'PAGO' ? 'text-primary-fixed' : 'text-error'}>{t.status === 'PAGO' ? 'PAGO' : 'PENDENTE'}</span>
                         </p>
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-1 shrink-0 ml-3">
-                      <p className={`font-headline font-bold text-sm ${isReceita ? 'text-primary-fixed' : 'text-error'}`}>
+                      <p className={`font-headline font-bold text-sm ${isReceita ? 'text-primary-fixed' : 'text-error'} ${t.status !== 'PAGO' ? 'opacity-60' : ''}`}>
                         {isReceita ? '+' : '-'} {formatCurrency(t.valor)}
                       </p>
                       <span className={`font-label text-[9px] uppercase tracking-widest px-2 py-0.5 rounded-full ${
@@ -188,7 +191,7 @@ const Painel = ({ setTab, openTransaction, openAI, openTask }) => {
         {/* Right: Agenda de Hoje */}
         <section className="lg:col-span-5">
           <div className="flex justify-between items-end mb-6">
-            <h3 className="font-headline font-bold text-2xl text-on-surface tracking-tight">Agenda de Hoje</h3>
+            <h3 className="font-headline font-bold text-2xl text-on-surface tracking-tight">Agenda</h3>
             <button
               onClick={() => setTab('agenda')}
               className="font-label text-[10px] uppercase tracking-widest text-primary-fixed hover:underline transition-all"
@@ -204,7 +207,7 @@ const Painel = ({ setTab, openTransaction, openAI, openTask }) => {
           ) : events.length === 0 ? (
             <div className="py-16 text-center bg-surface-container-low rounded-2xl border border-dashed border-outline-variant/20">
               <Icon name="event" className="text-on-surface-variant/40 text-4xl mb-3" />
-              <p className="text-on-surface-variant text-sm">Sem eventos agendados para hoje.</p>
+              <p className="text-on-surface-variant text-sm">Sem eventos agendados.</p>
               <button onClick={() => setTab('agenda')} className="mt-3 text-primary-fixed font-label text-[10px] uppercase tracking-widest font-bold hover:underline">
                 Abrir agenda
               </button>
@@ -212,18 +215,31 @@ const Painel = ({ setTab, openTransaction, openAI, openTask }) => {
           ) : (
             <div className="relative pl-7 space-y-4 before:content-[''] before:absolute before:left-[9px] before:top-2 before:bottom-2 before:w-[1px] before:bg-outline-variant/20">
               {events.map((e) => {
+                const eventDate = e.data_inicio ? e.data_inicio.split('T')[0] : '';
+                const isToday = eventDate === today;
                 const hora = e.horario || (e.data_inicio ? new Date(e.data_inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '');
+                
                 return (
                   <div key={e.id} className="relative group cursor-pointer">
-                    <div className="absolute -left-7 top-1 w-[19px] h-[19px] rounded-full border-2 bg-surface-dim border-outline-variant group-hover:border-primary-fixed/60 transition-colors" />
-                    <div className="p-4 rounded-xl bg-surface-container-low hover:bg-surface-container transition-colors border border-outline-variant/5">
+                    <div className={`absolute -left-7 top-1 w-[19px] h-[19px] rounded-full border-2 transition-colors ${
+                      isToday 
+                        ? 'bg-primary-fixed border-primary-fixed shadow-[0_0_10px_rgba(var(--primary-glow),0.4)]' 
+                        : 'bg-surface-dim border-outline-variant group-hover:border-primary-fixed/60'
+                    }`} />
+                    <div className={`p-4 rounded-xl transition-colors border ${
+                      isToday 
+                        ? 'bg-primary-fixed/5 border-primary-fixed/20 shadow-sm' 
+                        : 'bg-surface-container-low hover:bg-surface-container border-outline-variant/5'
+                    }`}>
                       <div className="flex items-center gap-2 mb-1.5">
-                        <span className="font-label text-[10px] uppercase tracking-widest text-primary-fixed font-bold">{hora}</span>
+                        <span className={`font-label text-[10px] uppercase tracking-widest font-bold ${isToday ? 'text-primary-fixed' : 'text-primary-fixed/70'}`}>
+                          {isToday ? 'HOJE • ' : ''} {hora}
+                        </span>
                         {e.tag && (
                           <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-tighter bg-surface-container-highest text-on-surface-variant">{e.tag}</span>
                         )}
                       </div>
-                      <h4 className="font-body font-semibold text-on-surface text-sm">{e.titulo}</h4>
+                      <h4 className={`font-body font-semibold text-sm ${isToday ? 'text-on-surface' : 'text-on-surface/90'}`}>{e.titulo}</h4>
                       {e.descricao && <p className="text-on-surface-variant text-xs mt-1 leading-relaxed line-clamp-2">{e.descricao}</p>}
                     </div>
                   </div>

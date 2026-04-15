@@ -1,0 +1,688 @@
+﻿1: import React, { useState, useEffect, useRef } from 'react';
+2: import { motion, AnimatePresence } from 'framer-motion';
+3: import Icon from '../components/Icon';
+4: import { BancoBadge } from '../components/GerenciarContas';
+5: import { useAuth } from '../contexts/AuthContext';
+6: import { getCategories, saveTransaction, updateTransaction, deleteTransaction, createCategory, getContas, uploadAnexo } from '../lib/database';
+7: 
+8: const ICONES_RAPIDOS = [
+9:   'fastfood', 'directions_car', 'home', 'school', 'local_hospital',
+10:   'shopping_cart', 'flight', 'sports_esports', 'fitness_center', 'pets',
+11:   'attach_money', 'work', 'trending_up', 'savings', 'card_giftcard',
+12:   'receipt_long', 'local_gas_station', 'restaurant', 'phone_android', 'wifi',
+13: ];
+14: 
+15: const Lancamento = ({ type = 'expense', onBack, initialData = null }) => {
+16:   const { user } = useAuth();
+17:   const [value, setValue] = useState('');
+18:   const [description, setDescription] = useState('');
+19:   const [category, setCategory] = useState('');
+20:   const [date, setDate] = useState(new Date().toLocaleDateString('sv-SE'));
+21:   const [repetitionType, setRepetitionType] = useState('single'); // single, fixed, installments
+22:   const [numInstallments, setNumInstallments] = useState('2');
+23:   const [dbCategories, setDbCategories] = useState([]);
+24:   const [contas, setContas] = useState([]);
+25:   const [contaId, setContaId] = useState('');
+26:   const [loading, setLoading] = useState(false);
+27:   const [isPaid, setIsPaid] = useState(false);
+28:   const [anexos, setAnexos] = useState([]);
+29:   const [uploading, setUploading] = useState(false);
+30:   const [partialValue, setPartialValue] = useState('');
+31:   const [showPartial, setShowPartial] = useState(false);
+32: 
+33:   // â”€â”€ Nova categoria inline â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+34:   const [showNewCat, setShowNewCat] = useState(false);
+35:   const [newCatNome, setNewCatNome] = useState('');
+36:   const [newCatIcone, setNewCatIcone] = useState('receipt_long');
+37:   const [savingCat, setSavingCat] = useState(false);
+38:   const [catError, setCatError] = useState('');
+39:   const newCatInputRef = useRef(null);
+40: 
+41:   const isExpense = type === 'expense';
+42:   const isEditing = !!initialData;
+43:   const themeColor = isExpense ? 'text-error' : 'text-primary-fixed';
+44:   const bgColor    = isExpense ? 'bg-error/10'  : 'bg-primary-fixed/10';
+45:   const accentBg   = isExpense ? 'bg-error'     : 'bg-primary-fixed';
+46:   const accentText = isExpense ? 'text-error'   : 'text-primary-fixed';
+47:   const borderAccent = isExpense ? 'border-error/30' : 'border-primary-fixed/30';
+48: 
+49:   useEffect(() => {
+50:     loadCategories();
+51:     loadContas();
+52: 
+53:     if (initialData) {
+54:       setDescription(initialData.descricao || '');
+55:       setCategory(initialData.categoria_id || '');
+56:       setContaId(initialData.conta_id || '');
+57:       setDate(initialData.data_vencimento || new Date().toLocaleDateString('sv-SE'));
+58:       if (initialData.valor) {
+59:         const formatted = parseFloat(initialData.valor).toLocaleString('pt-BR', {
+60:           style: 'currency', currency: 'BRL',
+61:         });
+62:         setValue(formatted);
+63:       }
+64:       setIsPaid(initialData.status === 'PAGO');
+65:       setAnexos(initialData.anexos || []);
+66:     }
+67:   }, [user, type, initialData]);
+68: 
+69:   async function loadContas() {
+70:     if (!user) return;
+71:     try {
+72:       const data = await getContas(user.id);
+73:       setContas(data);
+74:       // Seleciona a conta padrÃ£o automaticamente
+75:       const padrao = data.find(c => c.padrao);
+76:       if (padrao && !initialData) setContaId(padrao.id);
+77:     } catch (e) {
+78:       console.error('Erro ao carregar contas:', e);
+79:     }
+80:   }
+81: 
+82:   async function loadCategories() {
+83:     if (!user) return;
+84:     try {
+85:       const data = await getCategories(user.id, type);
+86:       setDbCategories(data);
+87:     } catch (err) {
+88:       console.error('Erro ao carregar categorias:', err);
+89:     }
+90:   }
+91: 
+92:   const handleValueChange = (e) => {
+93:     let val = e.target.value.replace(/\D/g, '');
+94:     if (val === '') { setValue(''); return; }
+95:     const numericValue = (parseInt(val) / 100).toLocaleString('pt-BR', {
+96:       style: 'currency', currency: 'BRL',
+97:     });
+98:     setValue(numericValue);
+99:   };
+100: 
+101:   const handleSubmit = async (e) => {
+102:     e.preventDefault();
+103:     if (!user || loading) return;
+104:     setLoading(true);
+105:     try {
+106:       const numericVal = parseFloat(
+107:         value.replace('R$', '').replace(/\./g, '').replace(',', '.').trim()
+108:       );
+109:       const txData = {
+110:         value: numericVal,
+111:         description,
+112:         categoryId: category,
+113:         contaId: contaId || null,
+114:         date,
+115:         type,
+116:         status: isPaid ? 'PAGO' : 'PENDENTE',
+117:         anexos: anexos,
+118:         installments: repetitionType === 'installments' ? parseInt(numInstallments) : 1,
+119:         isFixed: repetitionType === 'fixed'
+120:       };
+121:       if (isEditing) {
+122:         await updateTransaction(initialData.id, txData);
+123:       } else {
+124:         await saveTransaction(user.id, txData);
+125:       }
+126:       onBack();
+127:     } catch (err) {
+128:       console.error('Erro ao salvar lanÃ§amento:', err);
+129:       alert('Erro ao salvar lanÃ§amento. Verifique se as categorias foram criadas.');
+130:     } finally {
+131:       setLoading(false);
+132:     }
+133:   };
+134: 
+135:   const handleFileChange = async (e) => {
+136:     const files = Array.from(e.target.files);
+137:     if (files.length === 0) return;
+138: 
+139:     setUploading(true);
+140:     try {
+141:       const results = await Promise.all(
+142:         files.map(file => uploadAnexo(user.id, file))
+143:       );
+144:       setAnexos(prev => [...prev, ...results]);
+145:     } catch (err) {
+146:       console.error('Erro no upload:', err);
+147:       alert('Falha ao enviar arquivo.');
+148:     } finally {
+149:       setUploading(false);
+150:     }
+151:   };
+152: 
+153:   const removeAnexo = (index) => {
+154:     setAnexos(prev => prev.filter((_, i) => i !== index));
+155:   };
+156: 
+157:   const handleDelete = async () => {
+158:     if (!isEditing || loading) return;
+159:     if (!confirm('Tem certeza que deseja excluir este lanÃ§amento?')) return;
+160:     setLoading(true);
+161:     try {
+162:       await deleteTransaction(initialData.id);
+163:       onBack();
+164:     } catch (err) {
+165:       console.error('Erro ao excluir lanÃ§amento:', err);
+166:       alert('Erro ao excluir lanÃ§amento.');
+167:     } finally {
+168:       setLoading(false);
+169:     }
+170:   };
+171: 
+172:   // â”€â”€ Criar categoria nova inline â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+173:   async function handleCreateCategory() {
+174:     if (!newCatNome.trim()) return;
+175:     setSavingCat(true);
+176:     setCatError('');
+177:     try {
+178:       const nova = await createCategory(user.id, {
+179:         nome: newCatNome.trim(),
+180:         icone: newCatIcone,
+181:         tipo: type === 'expense' ? 'despesa' : 'receita',
+182:       });
+183:       const normalized = { ...nova, tipo: nova.tipo?.toLowerCase() };
+184:       setDbCategories(prev => [...prev, normalized]);
+185:       setCategory(nova.id); // seleciona automaticamente
+186:       setNewCatNome('');
+187:       setNewCatIcone('receipt_long');
+188:       setShowNewCat(false);
+189:     } catch (e) {
+190:       setCatError(e?.message ?? 'Erro ao criar categoria.');
+191:     } finally {
+192:       setSavingCat(false);
+193:     }
+194:   }
+195: 
+196:   function openNewCat() {
+197:     setShowNewCat(true);
+198:     setNewCatNome('');
+199:     setNewCatIcone('receipt_long');
+200:     setCatError('');
+201:     setTimeout(() => newCatInputRef.current?.focus(), 100);
+202:   }
+203: 
+204:   return (
+205:     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+206:       {/* Backdrop */}
+207:       <motion.div
+208:         initial={{ opacity: 0 }}
+209:         animate={{ opacity: 1 }}
+210:         exit={{ opacity: 0 }}
+211:         onClick={onBack}
+212:         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+213:       />
+214: 
+215:       {/* Modal Card */}
+216:       <motion.div
+217:         initial={{ opacity: 0, scale: 0.9, y: 20 }}
+218:         animate={{ opacity: 1, scale: 1, y: 0 }}
+219:         exit={{ opacity: 0, scale: 0.9, y: 20 }}
+220:         className="relative w-full max-w-lg bg-surface rounded-[2rem] shadow-2xl overflow-y-auto max-h-[90vh] border border-outline-variant/10"
+221:       >
+222:         <div className="p-8">
+223: 
+224:           {/* Internal Header */}
+225:           <div className="flex items-center justify-between mb-8">
+226:             <h2 className="font-label text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">
+227:               {isEditing ? 'Editar' : 'Novo'} LanÃ§amento:{' '}
+228:               <span className={themeColor}>{isExpense ? 'Despesa' : 'Receita'}</span>
+229:             </h2>
+230:             <div className="flex items-center gap-2">
+231:               {isEditing && (
+232:                 <button
+233:                   onClick={handleDelete}
+234:                   title="Excluir"
+235:                   className="w-8 h-8 flex items-center justify-center rounded-full bg-error/5 text-error hover:bg-error/10 transition-colors"
+236:                 >
+237:                   <Icon name="delete" className="text-sm" />
+238:                 </button>
+239:               )}
+240:               <button
+241:                 onClick={onBack}
+242:                 className="w-8 h-8 flex items-center justify-center rounded-full bg-on-surface/5 text-on-surface-variant hover:text-on-surface transition-colors"
+243:               >
+244:                 <Icon name="close" className="text-sm" />
+245:               </button>
+246:             </div>
+247:           </div>
+248: 
+249:           <form onSubmit={handleSubmit} className="space-y-8">
+250: 
+251:             {/* Value input (Large) */}
+252:             <div className="text-center">
+253:               <input
+254:                 autoFocus
+255:                 type="text"
+256:                 placeholder="R$ 0,00"
+257:                 value={value}
+258:                 onChange={handleValueChange}
+259:                 className={`w-full bg-transparent border-none text-center font-headline font-extrabold text-5xl md:text-6xl focus:ring-0 ${themeColor} tracking-tighter`}
+260:               />
+261:             </div>
+262: 
+263:             <div className="space-y-6">
+264:               {/* Description */}
+265:               <div className="space-y-2">
+266:                 <label className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant ml-1">
+267:                   DescriÃ§Ã£o
+268:                 </label>
+269:                 <input
+270:                   type="text"
+271:                   placeholder="Ex: Supermercado, Aluguel..."
+272:                   value={description}
+273:                   onChange={(e) => setDescription(e.target.value)}
+274:                   className="w-full h-12 bg-on-surface/5 border border-outline-variant/10 rounded-xl px-4 text-on-surface font-body focus:border-primary-fixed/30 focus:ring-0 transition-all outline-none"
+275:                 />
+276:               </div>
+277: 
+278:               {/* Category Grid */}
+279:               <div className="space-y-2">
+280:                 <div className="flex items-center justify-between ml-1">
+281:                   <label className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant">
+282:                     Categoria
+283:                   </label>
+284:                   {!showNewCat && (
+285:                     <button
+286:                       type="button"
+287:                       onClick={openNewCat}
+288:                       className={`flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest ${accentText} hover:opacity-80 transition-opacity`}
+289:                     >
+290:                       <Icon name="add_circle_outline" className="text-sm" />
+291:                       Nova Categoria
+292:                     </button>
+293:                   )}
+294:                 </div>
+295: 
+296:                 {/* â”€â”€ Mini-formulÃ¡rio de nova categoria â”€â”€ */}
+297:                 <AnimatePresence>
+298:                   {showNewCat && (
+299:                     <motion.div
+300:                       initial={{ opacity: 0, height: 0 }}
+301:                       animate={{ opacity: 1, height: 'auto' }}
+302:                       exit={{ opacity: 0, height: 0 }}
+303:                       transition={{ duration: 0.22 }}
+304:                       className="overflow-hidden"
+305:                     >
+306:                       <div className={`p-4 rounded-2xl border ${borderAccent} bg-on-surface/3 mb-3 space-y-3`}>
+307:                         <div className="flex items-center justify-between">
+308:                           <p className={`font-label text-[10px] uppercase tracking-widest font-bold ${accentText}`}>
+309:                             Nova Categoria
+310:                           </p>
+311:                           <button
+312:                             type="button"
+313:                             onClick={() => setShowNewCat(false)}
+314:                             className="text-on-surface-variant hover:text-on-surface transition-colors"
+315:                           >
+316:                             <Icon name="close" className="text-sm" />
+317:                           </button>
+318:                         </div>
+319: 
+320:                         {/* Nome */}
+321:                         <input
+322:                           ref={newCatInputRef}
+323:                           type="text"
+324:                           value={newCatNome}
+325:                           onChange={(e) => setNewCatNome(e.target.value)}
+326:                           onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleCreateCategory())}
+327:                           placeholder="Nome da categoria"
+328:                           className="w-full h-10 bg-on-surface/5 border border-outline-variant/10 rounded-xl px-4 text-on-surface text-sm font-body outline-none focus:border-primary-fixed/30 transition-all"
+329:                         />
+330: 
+331:                         {/* Seletor de Ã­cone */}
+332:                         <div className="flex flex-wrap gap-1.5">
+333:                           {ICONES_RAPIDOS.map((ic) => (
+334:                             <button
+335:                               key={ic}
+336:                               type="button"
+337:                               onClick={() => setNewCatIcone(ic)}
+338:                               className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all text-[16px] ${
+339:                                 newCatIcone === ic
+340:                                   ? `${accentBg} text-white`
+341:                                   : 'bg-on-surface/5 text-on-surface-variant hover:bg-on-surface/10'
+342:                               }`}
+343:                             >
+344:                               <Icon name={ic} className="text-[16px]" />
+345:                             </button>
+346:                           ))}
+347:                         </div>
+348: 
+349:                         {catError && (
+350:                           <p className="text-error text-[10px] font-bold uppercase tracking-widest">{catError}</p>
+351:                         )}
+352: 
+353:                         {/* BotÃµes */}
+354:                         <div className="flex gap-2">
+355:                           <button
+356:                             type="button"
+357:                             onClick={handleCreateCategory}
+358:                             disabled={savingCat || !newCatNome.trim()}
+359:                             className={`flex-1 h-9 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all disabled:opacity-40 ${accentBg} text-white hover:brightness-110`}
+360:                           >
+361:                             {savingCat
+362:                               ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+363:                               : <><Icon name="add" className="text-sm" /> Criar e Selecionar</>
+364:                             }
+365:                           </button>
+366:                           <button
+367:                             type="button"
+368:                             onClick={() => setShowNewCat(false)}
+369:                             className="h-9 px-4 rounded-xl bg-on-surface/10 text-on-surface-variant text-xs hover:bg-on-surface/20 transition-all"
+370:                           >
+371:                             Cancelar
+372:                           </button>
+373:                         </div>
+374:                       </div>
+375:                     </motion.div>
+376:                   )}
+377:                 </AnimatePresence>
+378: 
+379:                 {/* Grid de categorias existentes */}
+380:                 {dbCategories.length > 0 ? (
+381:                   <div className="grid grid-cols-3 gap-2">
+382:                     {dbCategories.map((cat) => (
+383:                       <button
+384:                         key={cat.id}
+385:                         type="button"
+386:                         onClick={() => setCategory(cat.id)}
+387:                         className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all duration-300 ${
+388:                           category === cat.id
+389:                             ? `${bgColor} border-primary-fixed/40`
+390:                             : 'bg-on-surface/5 border-transparent grayscale opacity-60 hover:grayscale-0 hover:opacity-100 hover:bg-on-surface/10'
+391:                         }`}
+392:                       >
+393:                         <Icon name={cat.icone || 'category'} className={`text-lg mb-2 ${category === cat.id ? themeColor : 'text-on-surface'}`} />
+394:                         <span className="text-[8px] font-label uppercase tracking-widest font-bold text-on-surface truncate w-full px-1 text-center">
+395:                           {cat.nome}
+396:                         </span>
+397:                       </button>
+398:                     ))}
+399:                   </div>
+400:                 ) : (
+401:                   !showNewCat && (
+402:                     <div className="p-4 bg-on-surface/5 rounded-xl border border-dashed border-outline-variant/20 text-center">
+403:                       <p className="text-[10px] text-on-surface-variant uppercase tracking-widest">Nenhuma categoria ainda</p>
+404:                       <button
+405:                         type="button"
+406:                         onClick={openNewCat}
+407:                         className={`mt-2 text-[9px] font-bold uppercase tracking-widest ${accentText} hover:opacity-80`}
+408:                       >
+409:                         + Criar primeira categoria
+410:                       </button>
+411:                     </div>
+412:                   )
+413:                 )}
+414:               </div>
+415: 
+416:               {/* Repetition Options */}
+417:               {!isEditing && (
+418:                 <div className="space-y-4 pt-2">
+419:                   <div className="flex bg-on-surface/5 p-1 rounded-2xl border border-outline-variant/10">
+420:                     {[
+421:                       { id: 'single',       label: 'Ãšnico',     icon: 'event' },
+422:                       { id: 'fixed',        label: 'Fixo',      icon: 'refresh' },
+423:                       { id: 'installments', label: 'Parcelado', icon: 'reorder' }
+424:                     ].map((opt) => (
+425:                       <button
+426:                         key={opt.id}
+427:                         type="button"
+428:                         onClick={() => setRepetitionType(opt.id)}
+429:                         className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl transition-all ${
+430:                           repetitionType === opt.id
+431:                             ? 'bg-surface shadow-sm text-primary-fixed font-bold'
+432:                             : 'text-on-surface-variant hover:text-on-surface'
+433:                         }`}
+434:                       >
+435:                         <Icon name={opt.icon} className="text-sm" />
+436:                         <span className="font-label text-[9px] uppercase tracking-wider">{opt.label}</span>
+437:                       </button>
+438:                     ))}
+439:                   </div>
+440: 
+441:                   {repetitionType === 'installments' && (
+442:                     <motion.div
+443:                       initial={{ opacity: 0, y: -10 }}
+444:                       animate={{ opacity: 1, y: 0 }}
+445:                       className="flex items-center gap-4 bg-primary-fixed/5 border border-primary-fixed/10 p-4 rounded-2xl"
+446:                     >
+447:                       <div className="flex-1">
+448:                         <p className="font-label text-[9px] uppercase tracking-widest text-primary-fixed-dim mb-1 font-bold">NÃºmero de Parcelas</p>
+449:                         <p className="text-[8px] text-on-surface-variant/60 leading-tight">O valor serÃ¡ repetido mensalmente.</p>
+450:                       </div>
+451:                       <input
+452:                         type="number"
+453:                         min="2"
+454:                         max="120"
+455:                         value={numInstallments}
+456:                         onChange={(e) => setNumInstallments(e.target.value)}
+457:                         className="w-16 h-10 bg-surface border border-primary-fixed/20 rounded-lg text-center font-bold text-on-surface focus:ring-1 focus:ring-primary-fixed transition-all outline-none"
+458:                       />
+459:                     </motion.div>
+460:                   )}
+461: 
+462:                   {repetitionType === 'fixed' && (
+463:                     <motion.div
+464:                       initial={{ opacity: 0, y: -10 }}
+465:                       animate={{ opacity: 1, y: 0 }}
+466:                       className="bg-primary-fixed/5 border border-primary-fixed/10 p-4 rounded-2xl flex items-center gap-3"
+467:                     >
+468:                       <div className="w-8 h-8 rounded-full bg-primary-fixed/10 flex items-center justify-center text-primary-fixed">
+469:                         <Icon name="event_repeat" className="text-sm" />
+470:                       </div>
+471:                       <div>
+472:                         <p className="font-label text-[9px] uppercase tracking-widest text-primary-fixed-dim font-bold">RecorrÃªncia Mensal</p>
+473:                         <p className="text-[8px] text-on-surface-variant/60">Este lanÃ§amento serÃ¡ marcado como fixo.</p>
+474:                       </div>
+475:                     </motion.div>
+476:                   )}
+477:                 </div>
+478:               )}
+479: 
+480:               {/* Conta BancÃ¡ria */}
+481:               {contas.length > 0 && (
+482:                 <div className="space-y-2">
+483:                   <label className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant ml-1">Conta</label>
+484:                   <div className="grid grid-cols-2 gap-2">
+485:                     {contas.map(conta => (
+486:                       <button
+487:                         key={conta.id}
+488:                         type="button"
+489:                         onClick={() => setContaId(conta.id)}
+490:                         className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
+491:                           contaId === conta.id
+492:                             ? `${bgColor} border-primary-fixed/40`
+493:                             : 'bg-on-surface/5 border-transparent opacity-60 hover:opacity-100 hover:bg-on-surface/10'
+494:                         }`}
+495:                       >
+496:                         <div
+497:                           className="w-8 h-8 rounded-lg flex items-center justify-center font-bold text-[10px] text-white flex-shrink-0 shadow"
+498:                           style={{ backgroundColor: conta.banco_cor || '#6B7280' }}
+499:                         >
+500:                           {conta.banco_nome?.slice(0,2).toUpperCase() || '??'}
+501:                         </div>
+502:                         <div className="text-left min-w-0">
+503:                           <p className={`font-bold text-[10px] uppercase tracking-widest truncate ${contaId === conta.id ? themeColor : 'text-on-surface'}`}>
+504:                             {conta.nome}
+505:                           </p>
+506:                           {conta.banco_nome && (
+507:                             <p className="text-on-surface-variant text-[9px] truncate">{conta.banco_nome}</p>
+508:                           )}
+509:                         </div>
+510:                       </button>
+511:                     ))}
+512:                   </div>
+513:                 </div>
+514:               )}
+515: 
+516:               </div>
+517: 
+518:               {/* Status de Pagamento */}
+519:               <div 
+520:                 onClick={() => setIsPaid(!isPaid)}
+521:                 className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${
+522:                   isPaid 
+523:                     ? `${bgColor} ${borderAccent}`
+524:                     : 'bg-on-surface/5 border-transparent opacity-60'
+525:                 }`}
+526:               >
+527:                 <div className="flex items-center gap-3">
+528:                   <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isPaid ? accentBg : 'bg-on-surface/10'}`}>
+529:                     <Icon name={isPaid ? 'task_alt' : 'schedule'} className={isPaid ? 'text-white' : 'text-on-surface-variant'} />
+530:                   </div>
+531:                   <div>
+532:                     <p className={`font-label text-xs uppercase tracking-widest font-bold ${isPaid ? accentText : 'text-on-surface'}`}>
+533:                       {isExpense ? (isPaid ? 'Despesa Paga' : 'Despesa Pendente') : (isPaid ? 'Receita Recebida' : 'Receita Pendente')}
+534:                     </p>
+535:                     <p className="text-[9px] text-on-surface-variant uppercase tracking-tighter">
+536:                       {isPaid ? 'O valor serÃ¡ debitado do saldo' : 'O lanÃ§amento ficarÃ¡ aguardando pagamento'}
+537:                     </p>
+538:                   </div>
+539:                 </div>
+540:                 <div className={`w-12 h-6 rounded-full relative transition-all ${isPaid ? accentBg : 'bg-on-surface/20'}`}>
+541:                   <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${isPaid ? 'left-7' : 'left-1'}`} />
+542:                 </div>
+543:               </div>
+544: 
+545:               {/* Anexos */}
+546:               <div className="space-y-3">
+547:                 <div className="flex items-center justify-between ml-1">
+548:                   <label className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant">Anexos</label>
+549:                   <label className={`flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest ${accentText} hover:opacity-80 transition-opacity cursor-pointer`}>
+550:                     <Icon name="attach_file" className="text-sm" />
+551:                     Anexar Arquivo
+552:                     <input type="file" multiple className="hidden" onChange={handleFileChange} />
+553:                   </label>
+554:                 </div>
+555: 
+556:                 {uploading && (
+557:                   <div className="flex items-center gap-3 p-4 bg-on-surface/5 rounded-2xl border border-dashed border-outline-variant/30 animate-pulse">
+558:                     <div className="w-5 h-5 border-2 border-primary-fixed/30 border-t-primary-fixed rounded-full animate-spin" />
+559:                     <span className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Enviando arquivos...</span>
+560:                   </div>
+561:                 )}
+562: 
+563:                 {anexos.length > 0 && (
+564:                   <div className="grid grid-cols-1 gap-2">
+565:                     {anexos.map((anexo, idx) => (
+566:                       <div key={idx} className="flex items-center justify-between p-3 bg-on-surface/3 border border-outline-variant/5 rounded-xl group">
+567:                         <div className="flex items-center gap-3 min-w-0 flex-1">
+568:                           <a 
+569:                             href={anexo.url} 
+570:                             target="_blank" 
+571:                             rel="noopener noreferrer"
+572:                             className="flex items-center gap-3 min-w-0 hover:opacity-70 transition-opacity"
+573:                           >
+574:                             <Icon name="description" className="text-on-surface-variant text-base" />
+575:                             <span className="text-[11px] font-medium text-on-surface truncate">{anexo.name}</span>
+576:                           </a>
+577:                         </div>
+578:                         <button 
+579:                           type="button"
+580:                           onClick={() => removeAnexo(idx)}
+581:                           className="w-6 h-6 flex items-center justify-center rounded-full bg-on-surface/5 text-on-surface-variant hover:bg-error/10 hover:text-error transition-all"
+582:                         >
+583:                           <Icon name="close" className="text-[12px]" />
+584:                         </button>
+585:                       </div>
+586:                     ))}
+587:                   </div>
+588:                 )}
+589:               </div>
+590:               </div>
+591: 
+592:               {/* Pagamento Parcial */}
+593:               {isEditing && initialData?.status === 'PENDENTE' && (
+594:                 <div className="space-y-3 p-4 bg-primary-fixed/5 border border-primary-fixed/10 rounded-2xl">
+595:                   <div className="flex items-center justify-between">
+596:                     <div>
+597:                       <h4 className="font-label text-[10px] uppercase tracking-widest text-primary-fixed-dim font-bold">Pagamento Parcial?</h4>
+598:                       <p className="text-[9px] text-on-surface-variant/60 leading-tight">Registre apenas o que foi pago agora.</p>
+599:                     </div>
+600:                     <button
+601:                       type="button"
+602:                       onClick={() => setShowPartial(!showPartial)}
+603:                       className={`px-3 py-1.5 rounded-lg font-label text-[9px] uppercase tracking-widest transition-all ${
+604:                         showPartial ? 'bg-primary-fixed text-on-primary' : 'bg-on-surface/5 text-on-surface-variant'
+605:                       }`}
+606:                     >
+607:                       {showPartial ? 'Cancelar' : 'Informar Valor'}
+608:                     </button>
+609:                   </div>
+610: 
+611:                   {showPartial && (
+612:                     <motion.div
+613:                       initial={{ opacity: 0, height: 0 }}
+614:                       animate={{ opacity: 1, height: 'auto' }}
+615:                       className="space-y-3 pt-2"
+616:                     >
+617:                       <div className="relative">
+618:                         <span className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant/50 font-label text-[10px]">R$</span>
+619:                         <input
+620:                           type="text"
+621:                           value={partialValue}
+622:                           onChange={(e) => {
+623:                             let val = e.target.value.replace(/\D/g, '');
+624:                             if (val === '') { setPartialValue(''); return; }
+625:                             const numericValue = (parseInt(val) / 100).toLocaleString('pt-BR', {
+626:                               minimumFractionDigits: 2,
+627:                               maximumFractionDigits: 2,
+628:                             });
+629:                             setPartialValue(numericValue);
+630:                           }}
+631:                           placeholder="0,00"
+632:                           className="w-full h-12 pl-10 pr-4 bg-surface border border-outline-variant/30 rounded-xl font-headline font-bold text-lg text-on-surface focus:ring-1 focus:ring-primary-fixed transition-all outline-none"
+633:                         />
+634:                       </div>
+635:                       <button
+636:                         type="button"
+637:                         onClick={async () => {
+638:                           if (!partialValue) return;
+639:                           setLoading(true);
+640:                           try {
+641:                             const numericVal = parseFloat(partialValue.replace(/\./g, '').replace(',', '.'));
+642:                             await recordPartialPayment(initialData.id, numericVal);
+643:                             if (onBack) onBack(); // Fecha o modal
+644:                           } catch (err) {
+645:                             console.error(err);
+646:                           } finally {
+647:                             setLoading(false);
+648:                           }
+649:                         }}
+650:                         disabled={loading || !partialValue}
+651:                         className="w-full h-10 bg-primary-fixed/20 text-primary-fixed-dim rounded-lg font-label text-[9px] uppercase tracking-[0.1em] font-bold hover:bg-primary-fixed/30 transition-all border border-primary-fixed/30"
+652:                       >
+653:                         {loading ? 'Processando...' : 'Confirmar Pagamento de Parte do Valor'}
+654:                       </button>
+655:                     </motion.div>
+656:                   )}
+657:                 </div>
+658:               )}
+659:             </div>
+660: 
+661:             {/* Submit Button */}
+662:             <button
+663:               type="submit"
+664:               disabled={!value || !category || loading}
+665:               className={`w-full h-14 rounded-xl flex items-center justify-center gap-3 font-label font-bold text-[10px] uppercase tracking-[0.2em] transition-all active:scale-95 disabled:opacity-30 disabled:grayscale ${
+666:                 isExpense
+667:                   ? 'bg-error text-white shadow-lg shadow-error/20'
+668:                   : 'bg-primary-fixed text-on-primary shadow-lg shadow-primary-fixed/20'
+669:               }`}
+670:             >
+671:               {loading ? (
+672:                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+673:               ) : (
+674:                 <>
+675:                   <Icon name={isEditing ? 'check_circle' : (isExpense ? 'remove_circle_outline' : 'add_circle_outline')} className="text-base" />
+676:                   <span>{isEditing ? 'Salvar AlteraÃ§Ãµes' : `LanÃ§ar ${isExpense ? 'Despesa' : 'Receita'}`}</span>
+677:                 </>
+678:               )}
+679:             </button>
+680: 
+681:           </form>
+682:         </div>
+683:       </motion.div>
+684:     </div>
+685:   );
+686: };
+687: 
+688: export default Lancamento;
