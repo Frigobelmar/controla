@@ -8,20 +8,14 @@ const today = new Date().toLocaleDateString('sv-SE');
 const formatCurrency = (val) =>
   Number(val).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-const formatDate = (dateStr) => {
-  if (!dateStr) return '';
-  const d = new Date(dateStr + 'T12:00:00');
-  const todayDate = new Date();
-  todayDate.setHours(12, 0, 0, 0); // Alinhando com d para cálculo preciso
-  
-  const diffInMs = d.getTime() - todayDate.getTime();
-  const diff = Math.round(diffInMs / 86400000);
-  
-  if (diff === 0) return 'Hoje';
-  if (diff === 1) return 'Amanhã';
-  if (diff === -1) return 'Ontem';
-  if (diff > 1 && diff <= 7) return `Em ${diff} dias`;
-  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+const getEventStyles = (tipo) => {
+  const mapping = {
+    'REUNIAO_CLIENTE': { dot: 'bg-primary-fixed border-primary-fixed', card: 'bg-primary-fixed/5 border-primary-fixed/20 shadow-[0_0_15px_rgba(var(--primary-glow),0.1)]', text: 'text-primary-fixed' },
+    'PRAZO_ENTREGA':   { dot: 'bg-error border-error', card: 'bg-error/5 border-error/20', text: 'text-error' },
+    'PESSOAL':         { dot: 'bg-on-surface-variant border-on-surface-variant', card: 'bg-surface-container-high border-outline-variant/20', text: 'text-on-surface-variant' },
+    'PROFISSIONAL':    { dot: 'bg-primary-fixed/60 border-primary-fixed/60', card: 'bg-surface-container-low border-outline-variant/10', text: 'text-on-surface/80' }
+  };
+  return mapping[tipo] || mapping['PROFISSIONAL'];
 };
 
 const Painel = ({ setTab, openTransaction, openAI, openTask }) => {
@@ -215,28 +209,35 @@ const Painel = ({ setTab, openTransaction, openAI, openTask }) => {
           ) : (
             <div className="relative pl-7 space-y-4 before:content-[''] before:absolute before:left-[9px] before:top-2 before:bottom-2 before:w-[1px] before:bg-outline-variant/20">
               {events.map((e) => {
-                const eventDate = e.data_inicio ? e.data_inicio.split('T')[0] : '';
-                const isToday = eventDate === today;
+                const eventDateStr = e.data_inicio ? e.data_inicio.split('T')[0] : '';
+                const relativeDay = formatDate(eventDateStr);
+                const isToday = eventDateStr === today;
                 const hora = e.horario || (e.data_inicio ? new Date(e.data_inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '');
+                const styles = getEventStyles(e.tipo);
                 
                 return (
                   <div key={e.id} className="relative group cursor-pointer">
                     <div className={`absolute -left-7 top-1 w-[19px] h-[19px] rounded-full border-2 transition-colors ${
                       isToday 
                         ? 'bg-primary-fixed border-primary-fixed shadow-[0_0_10px_rgba(var(--primary-glow),0.4)]' 
-                        : 'bg-surface-dim border-outline-variant group-hover:border-primary-fixed/60'
+                        : `${styles.dot} group-hover:brightness-110`
                     }`} />
-                    <div className={`p-4 rounded-xl transition-colors border ${
+                    <div className={`p-4 rounded-xl transition-all border ${
                       isToday 
                         ? 'bg-primary-fixed/5 border-primary-fixed/20 shadow-sm' 
-                        : 'bg-surface-container-low hover:bg-surface-container border-outline-variant/5'
-                    }`}>
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <span className={`font-label text-[10px] uppercase tracking-widest font-bold ${isToday ? 'text-primary-fixed' : 'text-primary-fixed/70'}`}>
-                          {isToday ? 'HOJE • ' : ''} {hora}
-                        </span>
-                        {e.tag && (
-                          <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-tighter bg-surface-container-highest text-on-surface-variant">{e.tag}</span>
+                        : styles.card
+                    } group-hover:scale-[1.01] duration-300`}>
+                      <div className="flex items-center justify-between gap-2 mb-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className={`font-label text-[10px] uppercase tracking-widest font-bold ${isToday ? 'text-primary-fixed' : styles.text}`}>
+                            {relativeDay === 'Hoje' ? '' : `${relativeDay} • `}{hora}
+                          </span>
+                          {e.tag && (
+                            <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-tighter bg-surface-container-highest text-on-surface-variant leading-none">{e.tag}</span>
+                          )}
+                        </div>
+                        {isToday && (
+                          <span className="font-label text-[8px] uppercase tracking-widest px-1.5 py-0.5 rounded bg-primary-fixed text-on-primary font-extrabold animate-pulse">HOJE</span>
                         )}
                       </div>
                       <h4 className={`font-body font-semibold text-sm ${isToday ? 'text-on-surface' : 'text-on-surface/90'}`}>{e.titulo}</h4>
