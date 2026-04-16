@@ -175,21 +175,16 @@ const Login = () => {
         const { data: authData, error } = await signIn({ email, password });
         if (error) throw error;
 
-        // Se o login foi no Supabase, verificamos se o usuário está liberado na nossa tabela
+        // Verificar se o usuário está liberado na tabela configuracao_dono
         const { data: stData, error: stError } = await supabase
-          .from('whatsapp_ativados')
+          .from('configuracao_dono')
           .select('status')
           .eq('email', email)
           .maybeSingle();
 
         if (stError) {
-          console.error('Erro ao verificar status:', stError);
-          // Em caso de erro técnico na verificação, melhor prevenir e barrar
-          await signOut();
-          throw new Error('Erro ao validar seu acesso. Tente novamente.');
-        }
-
-        if (!stData || stData.status !== 'liberado') {
+          console.warn('configuracao_dono: erro ao verificar status (ignorado):', stError.message);
+        } else if (stData && stData.status !== 'liberado') {
           await signOut();
           throw new Error('Seu acesso não está liberado. Entre em contato com o suporte.');
         }
