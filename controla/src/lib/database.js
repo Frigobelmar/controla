@@ -509,32 +509,50 @@ export async function getTasks(userId) {
  * Dashboard Stats
  */
 export async function getSummaryStats(userId) {
-  // Simplificação: pega as transações do mês atual para os cards
+  // Pega as transações do mês atual para os cards
   const startOfMonth = new Date();
   startOfMonth.setDate(1);
   const startISO = startOfMonth.toLocaleDateString('sv-SE');
 
   const { data, error } = await supabase
     .from('transacoes_financeiras')
-    .select('valor, tipo')
+    .select('valor, tipo, status')
     .eq('user_id', userId)
-    .eq('status', 'PAGO')
     .gte('data_vencimento', startISO);
 
   if (error) throw error;
 
-  const receitas = data
-    .filter(t => t.tipo === 'RECEBER')
+  // Valores Pagos
+  const receitasPagas = data
+    .filter(t => t.tipo === 'RECEBER' && t.status === 'PAGO')
     .reduce((acc, t) => acc + parseFloat(t.valor), 0);
 
-  const despesas = data
-    .filter(t => t.tipo === 'PAGAR')
+  const despesasPagas = data
+    .filter(t => t.tipo === 'PAGAR' && t.status === 'PAGO')
     .reduce((acc, t) => acc + parseFloat(t.valor), 0);
+
+  // Valores Pendentes
+  const receitasPendentes = data
+    .filter(t => t.tipo === 'RECEBER' && t.status !== 'PAGO')
+    .reduce((acc, t) => acc + parseFloat(t.valor), 0);
+
+  const despesasPendentes = data
+    .filter(t => t.tipo === 'PAGAR' && t.status !== 'PAGO')
+    .reduce((acc, t) => acc + parseFloat(t.valor), 0);
+
+  // Totais Previstos
+  const receitasTotal = receitasPagas + receitasPendentes;
+  const despesasTotal = despesasPagas + despesasPendentes;
 
   return {
-    receitas,
-    despesas,
-    saldo: receitas - despesas
+    receitas: receitasPagas,
+    despesas: despesasPagas,
+    saldo: receitasPagas - despesasPagas,
+    receitasPendentes,
+    despesasPendentes,
+    receitasTotal,
+    despesasTotal,
+    saldoTotal: receitasTotal - despesasTotal
   };
 }
 

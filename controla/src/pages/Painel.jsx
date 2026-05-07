@@ -55,10 +55,18 @@ const Painel = ({ setTab, openTransaction, openAI, openTask }) => {
         <div className="flex flex-col md:flex-row gap-6">
           <div className="flex-1 p-8 rounded-xl bg-surface-container-low relative overflow-hidden">
             <div className="absolute top-0 right-0 w-64 h-64 bg-primary-fixed/5 rounded-full blur-3xl -mr-20 -mt-20" />
-            <p className="font-label text-xs uppercase tracking-[0.2em] text-on-surface-variant mb-2">Saldo Total</p>
+            <div className="flex justify-between items-start mb-2">
+              <p className="font-label text-xs uppercase tracking-[0.2em] text-on-surface-variant">Saldo Previsto</p>
+              <div className="text-right">
+                <p className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant">Saldo Atual (Pago)</p>
+                <p className={`font-bold text-sm ${stats.saldo >= 0 ? 'text-primary-fixed' : 'text-error'}`}>
+                  {loading ? '...' : formatCurrency(stats.saldo)}
+                </p>
+              </div>
+            </div>
             <h2 className="font-headline font-extrabold text-on-surface tracking-[-0.04em] mb-4 text-4xl md:text-5xl">
-              <span className="text-primary-fixed text-glow">
-                {loading ? '...' : formatCurrency(stats.saldo)}
+              <span className={stats.saldoTotal >= 0 ? "text-primary-fixed text-glow" : "text-error text-glow"}>
+                {loading ? '...' : formatCurrency(stats.saldoTotal)}
               </span>
             </h2>
             <div className="flex items-center gap-2 text-primary-fixed-dim text-sm font-medium">
@@ -67,23 +75,31 @@ const Painel = ({ setTab, openTransaction, openAI, openTask }) => {
             </div>
           </div>
           <div className="flex flex-col gap-4 w-full md:w-80">
-            <div className="p-6 rounded-xl glass-panel border border-outline-variant/10">
-              <div className="flex justify-between items-start mb-4">
-                <span className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant">Receitas</span>
-                <Icon name="arrow_upward" className="text-primary-fixed" />
+            <div className="p-5 rounded-xl glass-panel border border-outline-variant/10">
+              <div className="flex justify-between items-start mb-2">
+                <span className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant">Receitas (Total)</span>
+                <Icon name="arrow_upward" className="text-primary-fixed text-sm" />
               </div>
-              <p className="font-headline font-bold text-2xl text-on-surface">
-                {loading ? '...' : formatCurrency(stats.receitas)}
+              <p className="font-headline font-bold text-2xl text-on-surface mb-2">
+                {loading ? '...' : formatCurrency(stats.receitasTotal)}
               </p>
+              <div className="flex justify-between text-[11px] font-medium border-t border-outline-variant/10 pt-2">
+                <span className="text-on-surface-variant">Recebido: <span className="text-primary-fixed">{loading ? '...' : formatCurrency(stats.receitas)}</span></span>
+                <span className="text-on-surface-variant">Pendente: <span className="text-on-surface">{loading ? '...' : formatCurrency(stats.receitasPendentes)}</span></span>
+              </div>
             </div>
-            <div className="p-6 rounded-xl glass-panel">
-              <div className="flex justify-between items-start mb-4">
-                <span className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant">Despesas</span>
-                <Icon name="arrow_downward" className="text-error" />
+            <div className="p-5 rounded-xl glass-panel border border-outline-variant/10">
+              <div className="flex justify-between items-start mb-2">
+                <span className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant">Despesas (Total)</span>
+                <Icon name="arrow_downward" className="text-error text-sm" />
               </div>
-              <p className="font-headline font-bold text-2xl text-on-surface">
-                {loading ? '...' : formatCurrency(stats.despesas)}
+              <p className="font-headline font-bold text-2xl text-on-surface mb-2">
+                {loading ? '...' : formatCurrency(stats.despesasTotal)}
               </p>
+              <div className="flex justify-between text-[11px] font-medium border-t border-outline-variant/10 pt-2">
+                <span className="text-on-surface-variant">Pago: <span className="text-error">{loading ? '...' : formatCurrency(stats.despesas)}</span></span>
+                <span className="text-on-surface-variant">Pendente: <span className="text-on-surface">{loading ? '...' : formatCurrency(stats.despesasPendentes)}</span></span>
+              </div>
             </div>
           </div>
         </div>
