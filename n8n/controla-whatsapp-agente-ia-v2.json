@@ -1,0 +1,471 @@
+{
+  "name": "CONTROLA+ WhatsApp Agente IA v2",
+  "nodes": [
+    {
+      "id": "node-webhook",
+      "name": "Webhook WhatsApp",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp-controla",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "whatsapp-controla"
+    },
+    {
+      "id": "node-extract",
+      "name": "Extrair Dados WhatsApp",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [460, 300],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "field-phone",
+              "name": "phone",
+              "value": "={{ $json.body.data.key.remoteJid.replace('@s.whatsapp.net','').replace('@g.us','') }}",
+              "type": "string"
+            },
+            {
+              "id": "field-message",
+              "name": "message",
+              "value": "={{ $json.body.data.message.conversation || ($json.body.data.message.extendedTextMessage && $json.body.data.message.extendedTextMessage.text) || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "field-messageid",
+              "name": "messageId",
+              "value": "={{ $json.body.data.key.id }}",
+              "type": "string"
+            },
+            {
+              "id": "field-pushname",
+              "name": "pushName",
+              "value": "={{ $json.body.data.pushName || 'Usuário' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "node-config-supabase",
+      "name": "Configurações Supabase",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [570, 300],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "conf-url",
+              "name": "supabaseUrl",
+              "value": "={{ $vars.SUPABASE_URL }}",
+              "type": "string"
+            },
+            {
+              "id": "conf-key",
+              "name": "supabaseKey",
+              "value": "={{ $vars.SUPABASE_SERVICE_KEY }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": { "includeOtherFields": true }
+      }
+    },
+    {
+      "id": "node-check-user",
+      "name": "Verificar Usuário no Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [680, 300],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.SUPABASE_URL }}/rest/v1/configuracao_dono",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "telefone_whatsapp", "value": "ilike.*{{ $node[\"Extrair Dados WhatsApp\"].json[\"phone\"] }}*" },
+            { "name": "select", "value": "id,nome,telefone_whatsapp" }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey",        "value": "={{ $vars.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $vars.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type",  "value": "application/json" }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "node-if-active",
+      "name": "Número Autorizado?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [900, 300],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "cond-active",
+              "leftValue": "={{ $json.length }}",
+              "rightValue": 0,
+              "operator": { "type": "number", "operation": "gt" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "node-prepare-context",
+      "name": "Preparar Contexto do Usuário",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [1120, 160],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "field-userid",
+              "name": "userId",
+              "value": "={{ $('Verificar Usuário no Supabase').item.json[0].id }}",
+              "type": "string"
+            },
+            {
+              "id": "field-username",
+              "name": "userName",
+              "value": "={{ $('Verificar Usuário no Supabase').item.json[0].nome || $('Extrair Dados WhatsApp').item.json.pushName }}",
+              "type": "string"
+            },
+            {
+              "id": "field-phone2",
+              "name": "phone",
+              "value": "={{ $('Extrair Dados WhatsApp').item.json.phone }}",
+              "type": "string"
+            },
+            {
+              "id": "field-message2",
+              "name": "userMessage",
+              "value": "={{ $('Extrair Dados WhatsApp').item.json.message }}",
+              "type": "string"
+            },
+            {
+              "id": "field-date",
+              "name": "dataAtual",
+              "value": "={{ new Date().toLocaleDateString('pt-BR', {weekday:'long', year:'numeric', month:'long', day:'numeric'}) }}",
+              "type": "string"
+            },
+            {
+              "id": "field-date-iso",
+              "name": "dataIso",
+              "value": "={{ new Date().toISOString().split('T')[0] }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "node-agent",
+      "name": "Agente IA CONTROLA+",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [1400, 160],
+      "parameters": {
+        "agentType": "conversationalAgent",
+        "text": "={{ $json.userMessage }}",
+        "options": {
+          "sessionIdType": "customKey",
+          "sessionKey": "={{ $json.phone }}",
+          "systemMessage": "=Você é o assistente financeiro inteligente do CONTROLA+, sistema de gestão financeira pessoal.\n\n━━━━━━━━━━━━━━━━━━━━━━\n👤 USUÁRIO ATUAL:\n- Nome: {{ $json.userName }}\n- user_id: {{ $json.userId }}\n- Data de hoje: {{ $json.dataAtual }}\n- Data ISO: {{ $json.dataIso }}\n━━━━━━━━━━━━━━━━━━━━━━\n\n🎯 SUAS CAPACIDADES:\nVocê pode realizar as seguintes ações para o usuário:\n1️⃣ Registrar lançamentos financeiros (despesas e receitas)\n2️⃣ Consultar lançamentos e resumo financeiro\n3️⃣ Criar novas categorias financeiras\n4️⃣ Listar categorias existentes\n5️⃣ Criar agendamentos e eventos na agenda\n6️⃣ Consultar agendamentos futuros\n7️⃣ Criar tarefas e compromissos\n\n📋 REGRAS OBRIGATÓRIAS:\n- SEMPRE use user_id: {{ $json.userId }} em TODAS as chamadas de ferramentas\n- NUNCA invente ou altere o user_id\n- Se a data não for mencionada, use {{ $json.dataIso }}\n- Valores sempre como número positivo (ex: 150.50, não -150.50)\n- tipo PAGAR = despesas, gastos, compras, contas a pagar\n- tipo RECEBER = receitas, salário, freelance, entradas de dinheiro\n- tipo DESPESA = categorias de gasto\n- tipo RECEITA = categorias de entrada\n\n💬 COMO RESPONDER:\n- Seja amigável, claro e direto\n- Use emojis para deixar as mensagens mais visuais\n- Sempre confirme o que foi feito com os dados registrados\n- Mostre valores no formato: R$ 1.500,00\n- Para listas, formate bem para fácil leitura no WhatsApp\n- Se não entender o pedido, peça esclarecimentos\n- Responda SEMPRE em português brasileiro\n\n🔄 FLUXO SUGERIDO:\n- Usuário menciona gasto/receita → use criar_lancamento\n- Usuário quer ver gastos → use listar_lancamentos\n- Usuário quer ver saldo → use consultar_resumo\n- Usuário menciona nova categoria → use criar_categoria\n- Usuário quer ver categorias → use listar_categorias\n- Usuário marca compromisso/reunião/evento → use criar_agendamento\n- Usuário quer ver agenda → use listar_agendamentos\n- Usuário quer criar tarefa → use criar_tarefa\n\nQuando não souber o categoria_id, liste as categorias primeiro e pergunte ao usuário qual usar, ou crie a categoria se não existir."
+        }
+      }
+    },
+    {
+      "id": "node-llm",
+      "name": "GPT-4o-mini",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [1200, -60],
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "options": {
+          "temperature": 0.5,
+          "maxTokens": 1500
+        }
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-credentials",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "id": "node-memory",
+      "name": "Memória de Conversa",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [1400, -60],
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Preparar Contexto do Usuário').item.json.phone }}",
+        "contextWindowLength": 10
+      }
+    },
+    {
+      "id": "tool-criar-lancamento",
+      "name": "Criar Lançamento",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [960, -260],
+      "parameters": {
+        "name": "criar_lancamento",
+        "description": "Cria um novo lançamento financeiro (despesa ou receita) no sistema CONTROLA+. Use para registrar gastos, compras, contas pagas, salários recebidos, etc. Requer: user_id, descricao, valor (número), tipo (PAGAR=despesa / RECEBER=receita), data_vencimento (YYYY-MM-DD).",
+        "jsCode": "=const p = $input.first().json;\nconst user_id = p.user_id;\nconst descricao = p.descricao;\nconst valor = parseFloat(p.valor);\nconst tipo = p.tipo;\nconst data_vencimento = p.data_vencimento || new Date().toISOString().split('T')[0];\nconst categoria_id = p.categoria_id || null;\nconst forma_pagamento = p.forma_pagamento || 'DINHEIRO';\nconst status = p.status || 'PENDENTE';\n\nif (!user_id || !descricao || !valor || !tipo) {\n  return { response: '⚠️ Erro: Parâmetros obrigatórios ausentes (user_id, descricao, valor, tipo).' };\n}\nif (!['PAGAR','RECEBER'].includes(tipo)) {\n  return { response: '⚠️ Erro: O tipo deve ser PAGAR ou RECEBER.' };\n}\n\ntry {\n  const body = {\n    user_id,\n    descricao,\n    valor,\n    tipo,\n    data_vencimento,\n    status,\n    forma_pagamento,\n    recorrente: false,\n    parcelado: false\n  };\n  if (categoria_id) body.categoria_id = categoria_id;\n\n  const resp = await fetch(`{{ $vars.SUPABASE_URL }}/rest/v1/transacoes_financeiras`, {\n    method: 'POST',\n    headers: {\n      'apikey': '{{ $vars.SUPABASE_SERVICE_KEY }}',\n      'Authorization': `Bearer {{ $vars.SUPABASE_SERVICE_KEY }}`,\n      'Content-Type': 'application/json',\n      'Prefer': 'return=representation'\n    },\n    body: JSON.stringify(body)\n  });\n\n  const data = await resp.json();\n  if (!resp.ok) return { response: `❌ Erro ao registrar: ${JSON.stringify(data)}` };\n\n  const lancamento = Array.isArray(data) ? data[0] : data;\n  const emoji = tipo === 'PAGAR' ? '💸' : '💰';\n  const valorFmt = valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });\n  const dataFmt = new Date(data_vencimento + 'T12:00:00').toLocaleDateString('pt-BR');\n\n  return { response: `${emoji} Lançamento registrado com sucesso!\\\\n\\\\n📝 *${descricao}*\\\\n💵 ${valorFmt}\\\\n📅 Vencimento: ${dataFmt}\\\\n🏷️ Tipo: ${tipo === 'PAGAR' ? 'Despesa' : 'Receita'}\\\\n🔖 Status: ${status}` };\n} catch (err) {\n  return { response: `⚠️ Erro inesperado: ${err.message}` };\n}",
+        "inputSchema": "{\"type\":\"object\",\"properties\":{\"user_id\":{\"type\":\"string\",\"description\":\"UUID do usuário - use sempre o user_id do contexto\"},\"descricao\":{\"type\":\"string\",\"description\":\"Descrição do lançamento (ex: Almoço no restaurante, Salário março)\"},\"valor\":{\"type\":\"number\",\"description\":\"Valor em reais como número positivo (ex: 150.50)\"},\"tipo\":{\"type\":\"string\",\"enum\":[\"PAGAR\",\"RECEBER\"],\"description\":\"PAGAR para despesas/gastos, RECEBER para receitas/entradas\"},\"data_vencimento\":{\"type\":\"string\",\"description\":\"Data no formato YYYY-MM-DD (ex: 2026-04-15). Se omitida, usa hoje.\"},\"categoria_id\":{\"type\":\"string\",\"description\":\"UUID da categoria (opcional). Liste categorias primeiro se não souber.\"},\"forma_pagamento\":{\"type\":\"string\",\"enum\":[\"DINHEIRO\",\"CARTAO_CREDITO\",\"CARTAO_DEBITO\",\"PIX\",\"TRANSFERENCIA\",\"BOLETO\"],\"description\":\"Forma de pagamento (padrão: DINHEIRO)\"},\"status\":{\"type\":\"string\",\"enum\":[\"PENDENTE\",\"PAGO\"],\"description\":\"Status do lançamento (padrão: PENDENTE)\"}},\"required\":[\"user_id\",\"descricao\",\"valor\",\"tipo\"]}"
+      }
+    },
+    {
+      "id": "tool-listar-lancamentos",
+      "name": "Listar Lançamentos",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [1180, -260],
+      "parameters": {
+        "name": "listar_lancamentos",
+        "description": "Lista os lançamentos financeiros do usuário com totais. Use para consultar despesas, receitas, histórico de gastos ou quando o usuário perguntar o que já registrou.",
+        "jsCode": "=const p = $input.first().json;\nconst user_id = p.user_id;\nconst tipo = p.tipo || null;\nconst limite = parseInt(p.limite) || 10;\nconst mes = p.mes || null;\n\nif (!user_id) return { response: '⚠️ Erro: user_id é obrigatório.' };\n\ntry {\n  let qs = `user_id=eq.${user_id}&order=data_vencimento.desc&limit=${limite}&select=id,descricao,valor,tipo,status,data_vencimento,forma_pagamento`;\n  if (tipo) qs += `&tipo=eq.${tipo}`;\n  if (mes) {\n    const [ano, mesNum] = mes.split('-').map(Number);\n    const ultimoDia = new Date(ano, mesNum, 0).getDate();\n    qs += `&data_vencimento=gte.${mes}-01&data_vencimento=lte.${mes}-${String(ultimoDia).padStart(2,'0')}`;\n  }\n\n  const resp = await fetch(`{{ $vars.SUPABASE_URL }}/rest/v1/transacoes_financeiras?${qs}`, {\n    headers: {\n      'apikey': '{{ $vars.SUPABASE_SERVICE_KEY }}',\n      'Authorization': `Bearer {{ $vars.SUPABASE_SERVICE_KEY }}`,\n      'Content-Type': 'application/json'\n    }\n  });\n\n  const data = await resp.json();\n  if (!resp.ok) return { response: `❌ Erro ao buscar: ${JSON.stringify(data)}` };\n  if (!data || data.length === 0) return { response: '📭 Nenhum lançamento encontrado para os filtros informados.' };\n\n  const totalRec = data.filter(l => l.tipo === 'RECEBER').reduce((s,l) => s + parseFloat(l.valor), 0);\n  const totalDesp = data.filter(l => l.tipo === 'PAGAR').reduce((s,l) => s + parseFloat(l.valor), 0);\n  const fmt = v => v.toLocaleString('pt-BR', { style:'currency', currency:'BRL' });\n\n  const lista = data.map(l => {\n    const e = l.tipo === 'PAGAR' ? '💸' : '💰';\n    const s = l.status === 'PAGO' ? '✅' : '⏳';\n    const d = new Date(l.data_vencimento + 'T12:00:00').toLocaleDateString('pt-BR');\n    return `${e}${s} ${l.descricao}: ${fmt(parseFloat(l.valor))} (${d})`;\n  }).join('\\\\n');\n\n  return { response: `📊 *Lançamentos Encontrados (${data.length}):*\\\\n\\\\n${lista}\\\\n\\\\n━━━━━━━━━━━━━━━━━━━━━━\\\\n💰 Receitas: ${fmt(totalRec)}\\\\n💸 Despesas: ${fmt(totalDesp)}\\\\n📈 Saldo: ${fmt(totalRec - totalDesp)}` };\n} catch (err) {\n  return { response: `⚠️ Erro: ${err.message}` };\n}",
+        "inputSchema": "{\"type\":\"object\",\"properties\":{\"user_id\":{\"type\":\"string\",\"description\":\"UUID do usuário\"},\"tipo\":{\"type\":\"string\",\"enum\":[\"PAGAR\",\"RECEBER\"],\"description\":\"Filtrar por tipo (opcional): PAGAR=despesas, RECEBER=receitas\"},\"limite\":{\"type\":\"number\",\"description\":\"Máximo de registros (padrão: 10, máx: 50)\"},\"mes\":{\"type\":\"string\",\"description\":\"Filtrar por mês no formato YYYY-MM (ex: 2026-04)\"}},\"required\":[\"user_id\"]}"
+      }
+    },
+    {
+      "id": "tool-criar-categoria",
+      "name": "Criar Categoria",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [1400, -260],
+      "parameters": {
+        "name": "criar_categoria",
+        "description": "Cria uma nova categoria financeira para organizar os lançamentos do usuário. Use quando o usuário pedir para adicionar ou criar uma categoria nova.",
+        "jsCode": "=const p = $input.first().json;\nconst user_id = p.user_id;\nconst nome = p.nome;\nconst tipo = p.tipo;\nconst icone = p.icone || '📁';\nconst meta = p.meta ? parseFloat(p.meta) : null;\n\nif (!user_id || !nome || !tipo) return { response: '⚠️ Erro: Parâmetros obrigatórios (user_id, nome, tipo) ausentes.' };\nif (!['RECEITA','DESPESA'].includes(tipo)) return { response: '⚠️ Erro: O tipo deve ser RECEITA ou DESPESA.' };\n\ntry {\n  const body = { user_id, nome, tipo, icone };\n  if (meta !== null) body.meta = meta;\n\n  const resp = await fetch(`{{ $vars.SUPABASE_URL }}/rest/v1/categorias`, {\n    method: 'POST',\n    headers: {\n      'apikey': '{{ $vars.SUPABASE_SERVICE_KEY }}',\n      'Authorization': `Bearer {{ $vars.SUPABASE_SERVICE_KEY }}`,\n      'Content-Type': 'application/json',\n      'Prefer': 'return=representation'\n    },\n    body: JSON.stringify(body)\n  });\n\n  const data = await resp.json();\n  if (!resp.ok) {\n    if (data.code === '23505') return { response: `⚠️ A categoria \"${nome}\" já existe! Escolha um nome diferente.` };\n    return { response: `❌ Erro ao criar categoria: ${JSON.stringify(data)}` };\n  }\n\n  const cat = Array.isArray(data) ? data[0] : data;\n  const tipoEmoji = tipo === 'RECEITA' ? '💰' : '💸';\n\n  return { response: `${icone} Categoria criada com sucesso!\\\\n\\\\n📂 *${nome}*\\\\n${tipoEmoji} Tipo: ${tipo}${meta ? `\\\\n🎯 Meta mensal: ${meta.toLocaleString('pt-BR', {style:'currency',currency:'BRL'})}` : ''}` };\n} catch (err) {\n  return { response: `⚠️ Erro: ${err.message}` };\n}",
+        "inputSchema": "{\"type\":\"object\",\"properties\":{\"user_id\":{\"type\":\"string\",\"description\":\"UUID do usuário\"},\"nome\":{\"type\":\"string\",\"description\":\"Nome da categoria (ex: Alimentação, Transporte, Salário, Freelance)\"},\"tipo\":{\"type\":\"string\",\"enum\":[\"RECEITA\",\"DESPESA\"],\"description\":\"RECEITA para entradas de dinheiro, DESPESA para gastos\"},\"icone\":{\"type\":\"string\",\"description\":\"Emoji para identificar a categoria visualmente (ex: 🍔, 🚗, 💼, 🏠)\"},\"meta\":{\"type\":\"number\",\"description\":\"Meta de gasto mensal em reais (opcional, recomendado apenas para DESPESA)\"}},\"required\":[\"user_id\",\"nome\",\"tipo\"]}"
+      }
+    },
+    {
+      "id": "tool-listar-categorias",
+      "name": "Listar Categorias",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [1620, -260],
+      "parameters": {
+        "name": "listar_categorias",
+        "description": "Lista as categorias cadastradas do usuário separadas por tipo. Use ANTES de criar um lançamento se não souber o categoria_id, ou quando o usuário quiser ver suas categorias.",
+        "jsCode": "=const p = $input.first().json;\nconst user_id = p.user_id;\nconst tipo = p.tipo || null;\n\nif (!user_id) return { response: '⚠️ Erro: user_id é obrigatório.' };\n\ntry {\n  let qs = `user_id=eq.${user_id}&order=nome.asc&select=id,nome,icone,tipo,meta`;\n  if (tipo) qs += `&tipo=eq.${tipo}`;\n\n  const resp = await fetch(`{{ $vars.SUPABASE_URL }}/rest/v1/categorias?${qs}`, {\n    headers: {\n      'apikey': '{{ $vars.SUPABASE_SERVICE_KEY }}',\n      'Authorization': `Bearer {{ $vars.SUPABASE_SERVICE_KEY }}`,\n      'Content-Type': 'application/json'\n    }\n  });\n\n  const data = await resp.json();\n  if (!resp.ok) return { response: `❌ Erro ao buscar categorias: ${JSON.stringify(data)}` };\n  if (!data || data.length === 0) return { response: '📂 Nenhuma categoria encontrada. Use criar_categoria para adicionar!' };\n\n  const receitas = data.filter(c => c.tipo === 'RECEITA');\n  const despesas = data.filter(c => c.tipo === 'DESPESA');\n  const fmt = v => parseFloat(v).toLocaleString('pt-BR', { style:'currency', currency:'BRL' });\n\n  let lista = '';\n  if (receitas.length > 0) {\n    lista += '💰 *RECEITAS:*\\\\n' + receitas.map(c => `  ${c.icone||'📂'} ${c.nome}${c.meta ? ` (meta: ${fmt(c.meta)})` : ''}`).join('\\\\n') + '\\\\n\\\\n';\n  }\n  if (despesas.length > 0) {\n    lista += '💸 *DESPESAS:*\\\\n' + despesas.map(c => `  ${c.icone||'📂'} ${c.nome}${c.meta ? ` (meta: ${fmt(c.meta)})` : ''}`).join('\\\\n');\n  }\n\n  return { response: `📂 *Categorias Disponíveis:*\\\\n\\\\n${lista}` };\n} catch (err) {\n  return { response: `⚠️ Erro: ${err.message}` };\n}",
+        "inputSchema": "{\"type\":\"object\",\"properties\":{\"user_id\":{\"type\":\"string\",\"description\":\"UUID do usuário\"},\"tipo\":{\"type\":\"string\",\"enum\":[\"RECEITA\",\"DESPESA\"],\"description\":\"Filtrar por tipo (opcional): RECEITA ou DESPESA\"}},\"required\":[\"user_id\"]}"
+      }
+    },
+    {
+      "id": "tool-criar-agendamento",
+      "name": "Criar Agendamento",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [960, -460],
+      "parameters": {
+        "name": "criar_agendamento",
+        "description": "Cria um novo evento ou compromisso na agenda do usuário. Use para marcar reuniões com clientes, prazos de entrega, compromissos pessoais ou profissionais.",
+        "jsCode": "=const p = $input.first().json;\nconst user_id = p.user_id;\nconst titulo = p.titulo;\nconst descricao = p.descricao || '';\nconst data_inicio = p.data_inicio;\nconst tipo = p.tipo || 'PESSOAL';\nconst status = 'PENDENTE';\n\nif (!user_id || !titulo || !data_inicio) return { response: '⚠️ Erro: Parâmetros obrigatórios (user_id, titulo, data_inicio) ausentes.' };\n\nconst tiposValidos = ['REUNIAO_CLIENTE','PRAZO_ENTREGA','PESSOAL','PROFISSIONAL'];\nif (!tiposValidos.includes(tipo)) return { response: `⚠️ Erro: Tipo inválido. Use: ${tiposValidos.join(', ')}` };\n\ntry {\n  const resp = await fetch(`{{ $vars.SUPABASE_URL }}/rest/v1/agendamentos`, {\n    method: 'POST',\n    headers: {\n      'apikey': '{{ $vars.SUPABASE_SERVICE_KEY }}',\n      'Authorization': `Bearer {{ $vars.SUPABASE_SERVICE_KEY }}`,\n      'Content-Type': 'application/json',\n      'Prefer': 'return=representation'\n    },\n    body: JSON.stringify({ user_id, titulo, descricao, data_inicio, tipo, status })\n  });\n\n  const data = await resp.json();\n  if (!resp.ok) return { response: `❌ Erro ao criar agendamento: ${JSON.stringify(data)}` };\n\n  const ag = Array.isArray(data) ? data[0] : data;\n  const tipoEmojis = { REUNIAO_CLIENTE:'🤝', PRAZO_ENTREGA:'⏰', PESSOAL:'👤', PROFISSIONAL:'💼' };\n  const emoji = tipoEmojis[tipo] || '📅';\n\n  const dataFmt = new Date(data_inicio).toLocaleString('pt-BR', {\n    weekday:'long', year:'numeric', month:'long', day:'numeric',\n    hour:'2-digit', minute:'2-digit', timeZone:'America/Sao_Paulo'\n  });\n\n  return { response: `${emoji} Agendamento criado!\\\\n\\\\n📋 *${titulo}*\\\\n📅 ${dataFmt}${descricao ? `\\\\n📝 ${descricao}` : ''}\\\\n🏷️ Tipo: ${tipo.replace('_',' ')}` };\n} catch (err) {\n  return { response: `⚠️ Erro: ${err.message}` };\n}",
+        "inputSchema": "{\"type\":\"object\",\"properties\":{\"user_id\":{\"type\":\"string\",\"description\":\"UUID do usuário\"},\"titulo\":{\"type\":\"string\",\"description\":\"Título do evento (ex: Reunião com cliente João, Entrega do projeto X)\"},\"descricao\":{\"type\":\"string\",\"description\":\"Detalhes adicionais do evento (opcional)\"},\"data_inicio\":{\"type\":\"string\",\"description\":\"Data e hora no formato ISO 8601 (ex: 2026-04-20T14:30:00). Se não houver hora, use 09:00:00.\"},\"tipo\":{\"type\":\"string\",\"enum\":[\"REUNIAO_CLIENTE\",\"PRAZO_ENTREGA\",\"PESSOAL\",\"PROFISSIONAL\"],\"description\":\"Tipo: REUNIAO_CLIENTE (encontro com cliente), PRAZO_ENTREGA (deadline), PESSOAL (compromisso pessoal), PROFISSIONAL (trabalho)\"}},\"required\":[\"user_id\",\"titulo\",\"data_inicio\"]}"
+      }
+    },
+    {
+      "id": "tool-listar-agendamentos",
+      "name": "Listar Agendamentos",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [1180, -460],
+      "parameters": {
+        "name": "listar_agendamentos",
+        "description": "Lista os agendamentos e eventos futuros do usuário. Use para consultar a agenda, ver compromissos ou verificar o que tem marcado.",
+        "jsCode": "=const p = $input.first().json;\nconst user_id = p.user_id;\nconst limite = parseInt(p.limite) || 10;\nconst data_filtro = p.data_filtro || new Date().toISOString().split('T')[0];\nconst tipo = p.tipo || null;\n\nif (!user_id) return { response: '⚠️ Erro: user_id é obrigatório.' };\n\ntry {\n  let qs = `user_id=eq.${user_id}&data_inicio=gte.${data_filtro}&order=data_inicio.asc&limit=${limite}&select=id,titulo,descricao,data_inicio,tipo,status`;\n  if (tipo) qs += `&tipo=eq.${tipo}`;\n\n  const resp = await fetch(`{{ $vars.SUPABASE_URL }}/rest/v1/agendamentos?${qs}`, {\n    headers: {\n      'apikey': '{{ $vars.SUPABASE_SERVICE_KEY }}',\n      'Authorization': `Bearer {{ $vars.SUPABASE_SERVICE_KEY }}`,\n      'Content-Type': 'application/json'\n    }\n  });\n\n  const data = await resp.json();\n  if (!resp.ok) return { response: `❌ Erro ao buscar agenda: ${JSON.stringify(data)}` };\n  if (!data || data.length === 0) return { response: '📭 Nenhum agendamento encontrado para o período.' };\n\n  const tipoEmojis = { REUNIAO_CLIENTE:'🤝', PRAZO_ENTREGA:'⏰', PESSOAL:'👤', PROFISSIONAL:'💼' };\n\n  const lista = data.map(a => {\n    const e = tipoEmojis[a.tipo] || '📅';\n    const statusEmoji = a.status === 'CONCLUIDO' ? '✅' : a.status === 'CANCELADO' ? '❌' : '📌';\n    const dataFmt = new Date(a.data_inicio).toLocaleString('pt-BR', {\n      day:'2-digit', month:'2-digit', year:'numeric',\n      hour:'2-digit', minute:'2-digit', timeZone:'America/Sao_Paulo'\n    });\n    return `${e} ${statusEmoji} *${a.titulo}*\\\\n   📅 ${dataFmt}${a.descricao ? `\\\\n   📝 ${a.descricao}` : ''}`;\n  }).join('\\\\n\\\\n');\n\n  return { response: `📅 *Sua Agenda (${data.length} compromissos):*\\\\n\\\\n${lista}` };\n} catch (err) {\n  return { response: `⚠️ Erro: ${err.message}` };\n}",
+        "inputSchema": "{\"type\":\"object\",\"properties\":{\"user_id\":{\"type\":\"string\",\"description\":\"UUID do usuário\"},\"limite\":{\"type\":\"number\",\"description\":\"Máximo de agendamentos (padrão: 10)\"},\"data_filtro\":{\"type\":\"string\",\"description\":\"Buscar a partir desta data no formato YYYY-MM-DD (padrão: hoje)\"},\"tipo\":{\"type\":\"string\",\"enum\":[\"REUNIAO_CLIENTE\",\"PRAZO_ENTREGA\",\"PESSOAL\",\"PROFISSIONAL\"],\"description\":\"Filtrar por tipo de evento (opcional)\"}},\"required\":[\"user_id\"]}"
+      }
+    },
+    {
+      "id": "tool-resumo",
+      "name": "Consultar Resumo Financeiro",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [1400, -460],
+      "parameters": {
+        "name": "consultar_resumo",
+        "description": "Consulta o resumo financeiro mensal: total de receitas, despesas e saldo do período. Use quando o usuário perguntar sobre saldo, balanço mensal, quanto gastou ou quanto recebeu.",
+        "jsCode": "=const p = $input.first().json;\nconst user_id = p.user_id;\nconst mes = p.mes || new Date().toISOString().substring(0, 7);\n\nif (!user_id) return { response: '⚠️ Erro: user_id é obrigatório.' };\n\ntry {\n  const [ano, mesNum] = mes.split('-').map(Number);\n  const inicio = `${mes}-01`;\n  const ultimoDia = new Date(ano, mesNum, 0).getDate();\n  const fim = `${mes}-${String(ultimoDia).padStart(2,'0')}`;\n\n  const qs = `user_id=eq.${user_id}&data_vencimento=gte.${inicio}&data_vencimento=lte.${fim}&select=valor,tipo,status`;\n  const resp = await fetch(`{{ $vars.SUPABASE_URL }}/rest/v1/transacoes_financeiras?${qs}`, {\n    headers: {\n      'apikey': '{{ $vars.SUPABASE_SERVICE_KEY }}',\n      'Authorization': `Bearer {{ $vars.SUPABASE_SERVICE_KEY }}`,\n      'Content-Type': 'application/json'\n    }\n  });\n\n  const data = await resp.json();\n  if (!resp.ok) return { response: `❌ Erro ao buscar resumo: ${JSON.stringify(data)}` };\n\n  const fmt = v => v.toLocaleString('pt-BR', { style:'currency', currency:'BRL' });\n  const receitas = data.filter(t => t.tipo === 'RECEBER').reduce((s,t) => s + parseFloat(t.valor), 0);\n  const despesas = data.filter(t => t.tipo === 'PAGAR').reduce((s,t) => s + parseFloat(t.valor), 0);\n  const recPagas = data.filter(t => t.tipo === 'RECEBER' && t.status === 'PAGO').reduce((s,t) => s + parseFloat(t.valor), 0);\n  const despPagas = data.filter(t => t.tipo === 'PAGAR' && t.status === 'PAGO').reduce((s,t) => s + parseFloat(t.valor), 0);\n  const saldo = receitas - despesas;\n  const saldoReal = recPagas - despPagas;\n\n  const mesNome = new Date(ano, mesNum - 1, 1).toLocaleString('pt-BR', { month:'long', year:'numeric' });\n  const saldoEmoji = saldo >= 0 ? '📈' : '📉';\n  const saldoRealEmoji = saldoReal >= 0 ? '🟢' : '🔴';\n\n  return { response: `${saldoEmoji} *Resumo — ${mesNome}*\\\\n\\\\n💰 Receitas previstas: ${fmt(receitas)}\\\\n   ↳ realizadas: ${fmt(recPagas)}\\\\n\\\\n💸 Despesas previstas: ${fmt(despesas)}\\\\n   ↳ pagas: ${fmt(despPagas)}\\\\n\\\\n${saldoRealEmoji} Saldo realizado: *${fmt(saldoReal)}*\\\\n📊 Saldo previsto: ${fmt(saldo)}` };\n} catch (err) {\n  return { response: `⚠️ Erro: ${err.message}` };\n}",
+        "inputSchema": "{\"type\":\"object\",\"properties\":{\"user_id\":{\"type\":\"string\",\"description\":\"UUID do usuário\"},\"mes\":{\"type\":\"string\",\"description\":\"Mês no formato YYYY-MM (ex: 2026-04). Se omitido, usa o mês atual.\"}},\"required\":[\"user_id\"]}"
+      }
+    },
+    {
+      "id": "tool-criar-tarefa",
+      "name": "Criar Tarefa",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [1620, -460],
+      "parameters": {
+        "name": "criar_tarefa",
+        "description": "Cria uma nova tarefa ou lembrete para o usuário. Use quando o usuário mencionar que precisa fazer algo, criar um lembrete ou adicionar uma tarefa à sua lista.",
+        "jsCode": "=const p = $input.first().json;\nconst user_id = p.user_id;\nconst titulo = p.titulo;\nconst descricao = p.descricao || '';\nconst data_vencimento = p.data_vencimento || null;\nconst horario_vencimento = p.horario_vencimento || null;\nconst prioridade = p.prioridade || 'MEDIA';\nconst tag = p.tag || null;\n\nif (!user_id || !titulo) return { response: '⚠️ Erro: Parâmetros obrigatórios (user_id, titulo) ausentes.' };\n\nconst prioridadesValidas = ['ALTA','MEDIA','BAIXA'];\nif (!prioridadesValidas.includes(prioridade)) return { response: `⚠️ Erro: Prioridade inválida. Use: ${prioridadesValidas.join(', ')}` };\n\ntry {\n  const body = { user_id, titulo, descricao, prioridade, concluida: false };\n  if (data_vencimento) body.data_vencimento = data_vencimento;\n  if (horario_vencimento) body.horario_vencimento = horario_vencimento;\n  if (tag) body.tag = tag;\n\n  const resp = await fetch(`{{ $vars.SUPABASE_URL }}/rest/v1/tarefas`, {\n    method: 'POST',\n    headers: {\n      'apikey': '{{ $vars.SUPABASE_SERVICE_KEY }}',\n      'Authorization': `Bearer {{ $vars.SUPABASE_SERVICE_KEY }}`,\n      'Content-Type': 'application/json',\n      'Prefer': 'return=representation'\n    },\n    body: JSON.stringify(body)\n  });\n\n  const data = await resp.json();\n  if (!resp.ok) return { response: `❌ Erro ao criar tarefa: ${JSON.stringify(data)}` };\n\n  const tarefa = Array.isArray(data) ? data[0] : data;\n  const prioridadeEmojis = { ALTA:'🔴', MEDIA:'🟡', BAIXA:'🟢' };\n  const pEmoji = prioridadeEmojis[prioridade] || '🟡';\n\n  let msg = `✅ Tarefa criada!\\\\n\\\\n📌 *${titulo}*\\\\n${pEmoji} Prioridade: ${prioridade}`;\n  if (data_vencimento) {\n    const dataFmt = new Date(data_vencimento + 'T12:00:00').toLocaleDateString('pt-BR');\n    msg += `\\\\n📅 Prazo: ${dataFmt}${horario_vencimento ? ' às ' + horario_vencimento : ''}`;\n  }\n  if (descricao) msg += `\\\\n📝 ${descricao}`;\n  if (tag) msg += `\\\\n🏷️ Tag: ${tag}`;\n\n  return { response: msg };\n} catch (err) {\n  return { response: `⚠️ Erro: ${err.message}` };\n}",
+        "inputSchema": "{\"type\":\"object\",\"properties\":{\"user_id\":{\"type\":\"string\",\"description\":\"UUID do usuário\"},\"titulo\":{\"type\":\"string\",\"description\":\"Título da tarefa (ex: Pagar conta de luz, Enviar relatório ao cliente)\"},\"descricao\":{\"type\":\"string\",\"description\":\"Detalhes da tarefa (opcional)\"},\"data_vencimento\":{\"type\":\"string\",\"description\":\"Prazo no formato YYYY-MM-DD (opcional)\"},\"horario_vencimento\":{\"type\":\"string\",\"description\":\"Horário no formato HH:MM (opcional, ex: 14:30)\"},\"prioridade\":{\"type\":\"string\",\"enum\":[\"ALTA\",\"MEDIA\",\"BAIXA\"],\"description\":\"Prioridade da tarefa (padrão: MEDIA)\"},\"tag\":{\"type\":\"string\",\"description\":\"Tag ou categoria da tarefa (opcional, ex: financeiro, pessoal, trabalho)\"}},\"required\":[\"user_id\",\"titulo\"]}"
+      }
+    },
+    {
+      "id": "node-send-reply",
+      "name": "Enviar Resposta WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1660, 160],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.EVOLUTION_API_URL }}/message/sendText/{{ $vars.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey",       "value": "={{ $vars.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": {
+          "number": "={{ $('Preparar Contexto do Usuário').item.json.phone }}",
+          "text": "={{ $json.output }}",
+          "delay": 1000
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "node-not-authorized",
+      "name": "Número Não Autorizado",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1120, 460],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.EVOLUTION_API_URL }}/message/sendText/{{ $vars.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey",       "value": "={{ $vars.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": {
+          "number": "={{ $('Extrair Dados WhatsApp').item.json.phone }}",
+          "text": "⛔ *Acesso não autorizado*\n\nSeu número não está cadastrado no CONTROLA+.\n\nPara solicitar acesso, entre em contato com o administrador do sistema.",
+          "delay": 500
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "node-response-ok",
+      "name": "Responder Webhook OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1880, 300],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"ok\" }",
+        "options": { "responseCode": 200 }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook WhatsApp": {
+      "main": [[{ "node": "Extrair Dados WhatsApp", "type": "main", "index": 0 }]]
+    },
+    "Extrair Dados WhatsApp": {
+      "main": [[{ "node": "Configurações Supabase", "type": "main", "index": 0 }]]
+    },
+    "Configurações Supabase": {
+      "main": [[{ "node": "Verificar Usuário no Supabase", "type": "main", "index": 0 }]]
+    },
+    "Verificar Usuário no Supabase": {
+      "main": [[{ "node": "Número Autorizado?", "type": "main", "index": 0 }]]
+    },
+    "Número Autorizado?": {
+      "main": [
+        [{ "node": "Preparar Contexto do Usuário", "type": "main", "index": 0 }],
+        [{ "node": "Número Não Autorizado",        "type": "main", "index": 0 }]
+      ]
+    },
+    "Preparar Contexto do Usuário": {
+      "main": [[{ "node": "Agente IA CONTROLA+", "type": "main", "index": 0 }]]
+    },
+    "Agente IA CONTROLA+": {
+      "main": [[{ "node": "Enviar Resposta WhatsApp", "type": "main", "index": 0 }]]
+    },
+    "Enviar Resposta WhatsApp": {
+      "main": [[{ "node": "Responder Webhook OK", "type": "main", "index": 0 }]]
+    },
+    "Número Não Autorizado": {
+      "main": [[{ "node": "Responder Webhook OK", "type": "main", "index": 0 }]]
+    },
+    "GPT-4o-mini": {
+      "ai_languageModel": [[{ "node": "Agente IA CONTROLA+", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "Memória de Conversa": {
+      "ai_memory": [[{ "node": "Agente IA CONTROLA+", "type": "ai_memory", "index": 0 }]]
+    },
+    "Criar Lançamento": {
+      "ai_tool": [[{ "node": "Agente IA CONTROLA+", "type": "ai_tool", "index": 0 }]]
+    },
+    "Listar Lançamentos": {
+      "ai_tool": [[{ "node": "Agente IA CONTROLA+", "type": "ai_tool", "index": 0 }]]
+    },
+    "Criar Categoria": {
+      "ai_tool": [[{ "node": "Agente IA CONTROLA+", "type": "ai_tool", "index": 0 }]]
+    },
+    "Listar Categorias": {
+      "ai_tool": [[{ "node": "Agente IA CONTROLA+", "type": "ai_tool", "index": 0 }]]
+    },
+    "Criar Agendamento": {
+      "ai_tool": [[{ "node": "Agente IA CONTROLA+", "type": "ai_tool", "index": 0 }]]
+    },
+    "Listar Agendamentos": {
+      "ai_tool": [[{ "node": "Agente IA CONTROLA+", "type": "ai_tool", "index": 0 }]]
+    },
+    "Consultar Resumo Financeiro": {
+      "ai_tool": [[{ "node": "Agente IA CONTROLA+", "type": "ai_tool", "index": 0 }]]
+    },
+    "Criar Tarefa": {
+      "ai_tool": [[{ "node": "Agente IA CONTROLA+", "type": "ai_tool", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": ["whatsapp", "ia", "supabase", "controla", "agente", "financeiro"],
+  "triggerCount": 1,
+  "updatedAt": "2026-04-15T00:00:00.000Z",
+  "versionId": "2"
+}

@@ -1,0 +1,304 @@
+{
+  "name": "WhatsApp → Supabase → Agente IA",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp-incoming",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node-webhook",
+      "name": "Webhook WhatsApp",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "whatsapp-incoming"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "field-phone",
+              "name": "phone",
+              "value": "={{ $json.body.data.key.remoteJid.replace('@s.whatsapp.net','').replace('@g.us','') }}",
+              "type": "string"
+            },
+            {
+              "id": "field-message",
+              "name": "message",
+              "value": "={{ $json.body.data.message.conversation || $json.body.data.message.extendedTextMessage.text || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "field-messageid",
+              "name": "messageId",
+              "value": "={{ $json.body.data.key.id }}",
+              "type": "string"
+            },
+            {
+              "id": "field-pushname",
+              "name": "pushName",
+              "value": "={{ $json.body.data.pushName || 'Usuário' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-extract",
+      "name": "Extrair Dados",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.SUPABASE_URL }}/rest/v1/usuarios_whatsapp",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "telefone", "value": "=eq.{{ $json.phone }}" },
+            { "name": "ativo",    "value": "=eq.true" },
+            { "name": "select",   "value": "id,telefone,nome,ativo" }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey",        "value": "={{ $vars.SUPABASE_ANON_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $vars.SUPABASE_ANON_KEY }}" },
+            { "name": "Content-Type",  "value": "application/json" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-supabase-check",
+      "name": "Verificar Número no Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "cond-active",
+              "leftValue": "={{ $json.length }}",
+              "rightValue": 0,
+              "operator": { "type": "number", "operation": "gt" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-if-active",
+      "name": "Número Ativo?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "field-user",
+              "name": "usuario",
+              "value": "={{ $('Verificar Número no Supabase').item.json[0] }}",
+              "type": "object"
+            },
+            {
+              "id": "field-phone2",
+              "name": "phone",
+              "value": "={{ $('Extrair Dados').item.json.phone }}",
+              "type": "string"
+            },
+            {
+              "id": "field-msg2",
+              "name": "message",
+              "value": "={{ $('Extrair Dados').item.json.message }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-prepare-ai",
+      "name": "Preparar Contexto IA",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [1120, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $vars.OPENAI_API_KEY }}" },
+            { "name": "Content-Type",  "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": {
+          "model": "gpt-4o-mini",
+          "temperature": 0.7,
+          "messages": [
+            {
+              "role": "system",
+              "content": "Você é um assistente financeiro inteligente do sistema CONTROLA+. Ajude o usuário com lançamentos, consultas de saldo, despesas e receitas. Responda sempre em português brasileiro de forma clara e objetiva. Quando o usuário mencionar valores, datas ou categorias, extraia essas informações para registrar no sistema."
+            },
+            {
+              "role": "user",
+              "content": "={{ $json.message }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-openai",
+      "name": "Agente IA (OpenAI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1340, 200]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "field-reply",
+              "name": "resposta",
+              "value": "={{ $json.choices[0].message.content }}",
+              "type": "string"
+            },
+            {
+              "id": "field-phone3",
+              "name": "phone",
+              "value": "={{ $('Extrair Dados').item.json.phone }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-extract-reply",
+      "name": "Extrair Resposta IA",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [1560, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.EVOLUTION_API_URL }}/message/sendText/{{ $vars.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey",       "value": "={{ $vars.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": {
+          "number": "={{ $json.phone }}",
+          "text":   "={{ $json.resposta }}",
+          "delay":  1000
+        },
+        "options": {}
+      },
+      "id": "node-send-reply",
+      "name": "Enviar Resposta WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1780, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.EVOLUTION_API_URL }}/message/sendText/{{ $vars.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey",       "value": "={{ $vars.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": {
+          "number": "={{ $('Extrair Dados').item.json.phone }}",
+          "text":   "⛔ Acesso não autorizado. Seu número não está cadastrado no sistema CONTROLA+. Entre em contato com o administrador.",
+          "delay":  500
+        },
+        "options": {}
+      },
+      "id": "node-not-authorized",
+      "name": "Número Não Autorizado",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1120, 420]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"ok\" }",
+        "options": { "responseCode": 200 }
+      },
+      "id": "node-response-ok",
+      "name": "Responder Webhook OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2000, 300]
+    }
+  ],
+  "connections": {
+    "Webhook WhatsApp": {
+      "main": [[{ "node": "Extrair Dados", "type": "main", "index": 0 }]]
+    },
+    "Extrair Dados": {
+      "main": [[{ "node": "Verificar Número no Supabase", "type": "main", "index": 0 }]]
+    },
+    "Verificar Número no Supabase": {
+      "main": [[{ "node": "Número Ativo?", "type": "main", "index": 0 }]]
+    },
+    "Número Ativo?": {
+      "main": [
+        [{ "node": "Preparar Contexto IA",     "type": "main", "index": 0 }],
+        [{ "node": "Número Não Autorizado",     "type": "main", "index": 0 }]
+      ]
+    },
+    "Preparar Contexto IA": {
+      "main": [[{ "node": "Agente IA (OpenAI)", "type": "main", "index": 0 }]]
+    },
+    "Agente IA (OpenAI)": {
+      "main": [[{ "node": "Extrair Resposta IA", "type": "main", "index": 0 }]]
+    },
+    "Extrair Resposta IA": {
+      "main": [[{ "node": "Enviar Resposta WhatsApp", "type": "main", "index": 0 }]]
+    },
+    "Enviar Resposta WhatsApp": {
+      "main": [[{ "node": "Responder Webhook OK", "type": "main", "index": 0 }]]
+    },
+    "Número Não Autorizado": {
+      "main": [[{ "node": "Responder Webhook OK", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": ["whatsapp", "ia", "supabase"],
+  "triggerCount": 1,
+  "updatedAt": "2026-04-14T00:00:00.000Z",
+  "versionId": "1"
+}
