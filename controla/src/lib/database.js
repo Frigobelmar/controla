@@ -515,6 +515,7 @@ export async function getSummaryStats(userId) {
     .from('transacoes_financeiras')
     .select('valor, tipo')
     .eq('user_id', userId)
+    .eq('status', 'PAGO')
     .gte('data_vencimento', startISO);
 
   if (error) throw error;
@@ -522,7 +523,7 @@ export async function getSummaryStats(userId) {
   const receitas = data
     .filter(t => t.tipo === 'RECEBER')
     .reduce((acc, t) => acc + parseFloat(t.valor), 0);
-  
+
   const despesas = data
     .filter(t => t.tipo === 'PAGAR')
     .reduce((acc, t) => acc + parseFloat(t.valor), 0);
