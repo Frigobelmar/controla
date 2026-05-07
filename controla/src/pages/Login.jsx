@@ -239,7 +239,9 @@ const Login = () => {
 
     try {
       // Buscar o WhatsApp do usuário
+      // Buscar o WhatsApp e o Nome do usuário
       let whatsappNumber = null;
+      let userName = 'Usuário';
 
       const { data: userData } = await supabase
         .from('whatsapp_ativados')
@@ -249,16 +251,21 @@ const Login = () => {
 
       if (userData?.whatsapp) {
         whatsappNumber = userData.whatsapp.replace(/\D/g, '');
-      } else {
-        // Fallback: tentar buscar na tabela configuracao_dono para usuários antigos
-        const { data: donoData } = await supabase
-          .from('configuracao_dono')
-          .select('telefone_whatsapp')
-          .eq('email', forgotEmail)
-          .maybeSingle();
-          
-        if (donoData?.telefone_whatsapp) {
+      }
+
+      // Buscar nome na configuracao_dono (e usar whatsapp de lá como fallback)
+      const { data: donoData } = await supabase
+        .from('configuracao_dono')
+        .select('telefone_whatsapp, nome')
+        .eq('email', forgotEmail)
+        .maybeSingle();
+        
+      if (donoData) {
+        if (!whatsappNumber && donoData.telefone_whatsapp) {
           whatsappNumber = donoData.telefone_whatsapp.replace(/\D/g, '');
+        }
+        if (donoData.nome) {
+          userName = donoData.nome;
         }
       }
 
@@ -275,7 +282,7 @@ const Login = () => {
         body: JSON.stringify({
           whatsapp: whatsappNumber,
           code: pin,
-          name: 'Usuário',
+          name: userName,
           email: forgotEmail,
           timestamp: new Date().toISOString()
         })
