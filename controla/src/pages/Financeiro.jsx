@@ -250,36 +250,50 @@ const Financeiro = ({ setTab, openTransaction }) => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="md:col-span-1 p-6 rounded-xl bg-surface-container-low relative overflow-hidden">
               <div className="absolute top-0 right-0 w-32 h-32 bg-primary-fixed/5 rounded-full blur-3xl -mr-10 -mt-10" />
-              <p className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant mb-2">Saldo do Mês</p>
-              <p className={`font-headline font-extrabold text-3xl text-glow tracking-[-0.04em] ${stats.saldo >= 0 ? 'text-primary-fixed' : 'text-error'}`}>
-                {loading ? '...' : formatCurrency(stats.saldo)}
+              <div className="flex justify-between items-start mb-2">
+                <p className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant">Saldo Previsto</p>
+                <div className="text-right">
+                  <p className="font-label text-[9px] uppercase tracking-widest text-on-surface-variant">Atual (Pago)</p>
+                  <p className={`font-bold text-xs ${stats.saldo >= 0 ? 'text-primary-fixed' : 'text-error'}`}>
+                    {loading ? '...' : formatCurrency(stats.saldo)}
+                  </p>
+                </div>
+              </div>
+              <p className={`font-headline font-extrabold text-3xl text-glow tracking-[-0.04em] ${stats.saldoTotal >= 0 ? 'text-primary-fixed' : 'text-error'}`}>
+                {loading ? '...' : formatCurrency(stats.saldoTotal ?? stats.saldo)}
               </p>
-              <div className={`flex items-center gap-1.5 mt-2 text-xs ${stats.saldo >= 0 ? 'text-primary-fixed-dim' : 'text-error/70'}`}>
-                <Icon name={stats.saldo >= 0 ? 'trending_up' : 'trending_down'} className="text-sm" />
-                <span>{stats.saldo >= 0 ? 'Positivo este mês' : 'Negativo este mês'}</span>
+              <div className={`flex items-center gap-1.5 mt-2 text-xs ${stats.saldoTotal >= 0 ? 'text-primary-fixed-dim' : 'text-error/70'}`}>
+                <Icon name={stats.saldoTotal >= 0 ? 'trending_up' : 'trending_down'} className="text-sm" />
+                <span>{stats.saldoTotal >= 0 ? 'Positivo previsto' : 'Negativo previsto'}</span>
               </div>
             </div>
 
-            <div className="p-6 rounded-xl glass-panel border border-outline-variant/10">
-              <div className="flex justify-between items-start mb-4">
-                <p className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant">Entradas</p>
-                <Icon name="arrow_upward" className="text-primary-fixed" />
+            <div className="p-5 rounded-xl glass-panel border border-outline-variant/10">
+              <div className="flex justify-between items-start mb-2">
+                <span className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant">Receitas (Total)</span>
+                <Icon name="arrow_upward" className="text-primary-fixed text-sm" />
               </div>
-              <p className="font-headline font-bold text-2xl text-on-surface">
-                {loading ? '...' : formatCurrency(stats.receitas)}
+              <p className="font-headline font-bold text-2xl text-on-surface mb-2">
+                {loading ? '...' : formatCurrency(stats.receitasTotal ?? stats.receitas)}
               </p>
-              <p className="text-on-surface-variant text-xs mt-1">Total acumulado</p>
+              <div className="flex justify-between text-[11px] font-medium border-t border-outline-variant/10 pt-2">
+                <span className="text-on-surface-variant">Recebido: <span className="text-primary-fixed">{loading ? '...' : formatCurrency(stats.receitas)}</span></span>
+                <span className="text-on-surface-variant">Pendente: <span className="text-on-surface">{loading ? '...' : formatCurrency(stats.receitasPendentes ?? 0)}</span></span>
+              </div>
             </div>
 
-            <div className="p-6 rounded-xl glass-panel border border-outline-variant/10">
-              <div className="flex justify-between items-start mb-4">
-                <p className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant">Saídas</p>
-                <Icon name="arrow_downward" className="text-error" />
+            <div className="p-5 rounded-xl glass-panel border border-outline-variant/10">
+              <div className="flex justify-between items-start mb-2">
+                <span className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant">Despesas (Total)</span>
+                <Icon name="arrow_downward" className="text-error text-sm" />
               </div>
-              <p className="font-headline font-bold text-2xl text-on-surface">
-                {loading ? '...' : formatCurrency(stats.despesas)}
+              <p className="font-headline font-bold text-2xl text-on-surface mb-2">
+                {loading ? '...' : formatCurrency(stats.despesasTotal ?? stats.despesas)}
               </p>
-              <p className="text-on-surface-variant text-xs mt-1">Total de gastos</p>
+              <div className="flex justify-between text-[11px] font-medium border-t border-outline-variant/10 pt-2">
+                <span className="text-on-surface-variant">Pago: <span className="text-error">{loading ? '...' : formatCurrency(stats.despesas)}</span></span>
+                <span className="text-on-surface-variant">Pendente: <span className="text-on-surface">{loading ? '...' : formatCurrency(stats.despesasPendentes ?? 0)}</span></span>
+              </div>
             </div>
           </div>
         </section>
