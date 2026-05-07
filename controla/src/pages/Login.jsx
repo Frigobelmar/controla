@@ -207,7 +207,7 @@ const Login = () => {
 
         if (stError) {
           console.warn('configuracao_dono: erro ao verificar status (ignorado):', stError.message);
-        } else if (stData && stData.status !== 'liberado') {
+        } else if (stData && stData.status?.toLowerCase() !== 'liberado') {
           await signOut();
           throw new Error('Seu acesso não está liberado. Entre em contato com o suporte.');
         }
