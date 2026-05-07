@@ -587,18 +587,30 @@ const Lancamento = ({ type = 'expense', onBack, initialData = null }) => {
                             target="_blank" 
                             rel="noopener noreferrer"
                             className="flex items-center gap-3 min-w-0 hover:opacity-70 transition-opacity"
+                            title="Visualizar arquivo"
                           >
                             <Icon name="description" className="text-on-surface-variant text-base" />
                             <span className="text-[11px] font-medium text-on-surface truncate">{anexo.name}</span>
                           </a>
                         </div>
-                        <button 
-                          type="button"
-                          onClick={() => removeAnexo(idx)}
-                          className="w-6 h-6 flex items-center justify-center rounded-full bg-on-surface/5 text-on-surface-variant hover:bg-error/10 hover:text-error transition-all"
-                        >
-                          <Icon name="close" className="text-[12px]" />
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <a
+                            href={`${anexo.url}?download=`}
+                            download={anexo.name}
+                            className="w-6 h-6 flex items-center justify-center rounded-full bg-on-surface/5 text-on-surface-variant hover:bg-primary-fixed/10 hover:text-primary-fixed transition-all"
+                            title="Baixar arquivo"
+                          >
+                            <Icon name="download" className="text-[12px]" />
+                          </a>
+                          <button 
+                            type="button"
+                            onClick={() => removeAnexo(idx)}
+                            className="w-6 h-6 flex items-center justify-center rounded-full bg-on-surface/5 text-on-surface-variant hover:bg-error/10 hover:text-error transition-all"
+                            title="Remover anexo"
+                          >
+                            <Icon name="close" className="text-[12px]" />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
