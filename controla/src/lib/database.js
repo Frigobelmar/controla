@@ -235,6 +235,7 @@ export async function saveTransaction(userId, transaction) {
       tipo: dbType,
       forma_pagamento: 'DINHEIRO',
       status: transaction.status || 'PENDENTE',
+      anexos: transaction.anexos || null,
       recorrente: isRecurrent,
       parcelado: installments > 1,
       total_parcelas: installments > 1 ? installments : null,
@@ -264,6 +265,7 @@ export async function updateTransaction(id, transaction) {
       data_vencimento: transaction.date,
       tipo: dbType,
       status: transaction.status,
+      anexos: transaction.anexos || null,
       data_atualizacao: new Date().toISOString()
     })
     .eq('id', id)
@@ -330,6 +332,7 @@ export async function recordPartialPayment(txId, valorPago, proximaData) {
       tipo: original.tipo,
       forma_pagamento: original.forma_pagamento || 'DINHEIRO',
       status: 'PENDENTE',
+      anexos: original.anexos || null,
       recorrente: original.recorrente || false,
       parcelado: original.parcelado || false,
       total_parcelas: original.total_parcelas || null,
