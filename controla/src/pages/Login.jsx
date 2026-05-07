@@ -239,17 +239,33 @@ const Login = () => {
 
     try {
       // Buscar o WhatsApp do usuário
-      const { data: userData, error: userError } = await supabase
+      let whatsappNumber = null;
+
+      const { data: userData } = await supabase
         .from('whatsapp_ativados')
-        .select('whatsapp, email')
+        .select('whatsapp')
         .eq('email', forgotEmail)
         .maybeSingle();
 
-      if (userError || !userData?.whatsapp) {
+      if (userData?.whatsapp) {
+        whatsappNumber = userData.whatsapp.replace(/\D/g, '');
+      } else {
+        // Fallback: tentar buscar na tabela configuracao_dono para usuários antigos
+        const { data: donoData } = await supabase
+          .from('configuracao_dono')
+          .select('telefone_whatsapp')
+          .eq('email', forgotEmail)
+          .maybeSingle();
+          
+        if (donoData?.telefone_whatsapp) {
+          whatsappNumber = donoData.telefone_whatsapp.replace(/\D/g, '');
+        }
+      }
+
+      if (!whatsappNumber) {
         throw new Error('Nenhum número de WhatsApp encontrado para este email.');
       }
 
-      const whatsappNumber = userData.whatsapp.replace(/\D/g, '');
       const pin = Math.floor(100000 + Math.random() * 900000).toString();
       setForgotGeneratedPin(pin);
 
