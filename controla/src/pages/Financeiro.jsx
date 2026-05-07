@@ -482,7 +482,7 @@ const Financeiro = ({ setTab, openTransaction }) => {
                               className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-primary-fixed text-on-primary text-[10px] font-bold uppercase tracking-widest hover:brightness-110 active:scale-95 transition-all shrink-0"
                             >
                               <Icon name="payments" className="text-sm" />
-                              Pagar
+                              {t.tipo === 'RECEBER' ? 'Receber' : 'Pagar'}
                             </button>
                           )}
                         </div>
